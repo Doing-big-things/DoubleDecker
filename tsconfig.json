@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "packages/deck-model/src",
+    "packages/adapter-typescript/src",
+    "packages/core/src",
+    "packages/agent-gateway/src",
+    "packages/server/src",
+    "fixtures/*.ts"
+  ]
+}

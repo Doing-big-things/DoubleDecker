@@ -1,0 +1,12 @@
+{
+  "name": "@decker/adapter-typescript",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Compile up: extracts a deck snapshot from a TypeScript project.",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@decker/deck-model": "*",
+    "ts-morph": "^28.0.0"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@decker/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The local server: HTTP and WebSocket API, static hosting, CLI entry.",
+  "bin": { "decker": "./bin/decker.mjs" },
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@decker/adapter-typescript": "*",
+    "@decker/agent-gateway": "*",
+    "@decker/core": "*",
+    "@decker/deck-model": "*",
+    "@hono/node-server": "^2.1.4",
+    "chokidar": "^5.0.0",
+    "hono": "^4.13.13",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
+  }
+}

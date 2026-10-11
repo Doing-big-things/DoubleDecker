@@ -1,0 +1,13 @@
+{
+  "name": "@decker/deck-model",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Schemas and types for the deck model. Pure, no I/O.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}

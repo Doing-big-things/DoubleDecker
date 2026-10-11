@@ -1,0 +1,13 @@
+{
+  "name": "@decker/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Git and worktrees, identity, reconciliation, the change coordinator.",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@decker/adapter-typescript": "*",
+    "@decker/agent-gateway": "*",
+    "@decker/deck-model": "*"
+  }
+}
