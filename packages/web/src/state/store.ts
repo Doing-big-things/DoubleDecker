@@ -13,14 +13,16 @@ import {
   type Point,
   pathTo,
   type ReviewBundle,
+  requirementTests,
   type ServerEvent,
   type TestRun,
+  withGroups,
   withNotes,
 } from '@decker/deck-model';
 import { create } from 'zustand';
 import { connect, type DeckSource, type Transition } from '../data/source';
 import { camera, type Level, levelOf } from '../map/camera';
-import { autoLayout, countMissing, type Positions, placeMissing } from '../model/layout';
+import { autoLayout, countMissing, makeRoom, type Positions, placeMissing, settle } from '../model/layout';
 import { collapsedHeight } from '../model/measure';
 import { applyOps, type Marks } from '../model/pending';
 
@@ -41,7 +43,18 @@ export type Popover =
 
 type UndoEntry =
   | { kind: 'ops'; before: ChangeOp[]; after: ChangeOp[] }
-  | { kind: 'layout'; before: Positions; after: Positions; pinnedBefore: Id[]; pinnedAfter: Id[] };
+  | {
+      kind: 'layout';
+      before: Positions;
+      after: Positions;
+      pinnedBefore: Id[];
+      pinnedAfter: Id[];
+      groupsBefore?: Groups;
+      groupsAfter?: Groups;
+    };
+
+/** Blocks drawn in an area other than the one their code lives in, by block id (spec §3.8). */
+export type Groups = Record<Id, Id>;
 
 export interface Toast {
   id: number;
@@ -83,6 +96,9 @@ export interface DeckState {
   changedIds: Set<Id> | null;
   positions: Positions;
   pinned: Id[];
+  groups: Groups;
+  /** The area a block being dragged would land in, when that is not the one it is in. */
+  dropArea: Id | null;
   laying: boolean;
   layoutEpoch: number;
 
@@ -133,7 +149,10 @@ export interface DeckState {
   back(): void;
   forward(): void;
   tidy(): Promise<void>;
-  moveNode(id: Id, position: Point): void;
+  /** Move a block. With `toArea`, also regroup it into that area: a change to the picture only. */
+  moveNode(id: Id, position: Point, toArea?: Id): void;
+  /** Draw a regrouped block back in the area its code lives in. */
+  ungroup(id: Id): void;
   toast(text: string, error?: boolean): void;
 
   addOp(op: ChangeOp): void;
@@ -226,7 +245,14 @@ export const useDeck = create<DeckState>()((set, get) => {
     const real = new Set(s.bundle.snapshot.nodes.map((n) => n.id));
     const positions: Positions = {};
     for (const [id, p] of Object.entries(s.positions)) if (real.has(id)) positions[id] = p;
-    s.source.saveLayout({ version: 1, positions, pinned: s.pinned.filter((id) => real.has(id)) });
+    const groups: Groups = {};
+    for (const [id, area] of Object.entries(s.groups)) if (real.has(id) && real.has(area)) groups[id] = area;
+    s.source.saveLayout({
+      version: 1,
+      positions,
+      pinned: s.pinned.filter((id) => real.has(id)),
+      ...(Object.keys(groups).length ? { groups } : {}),
+    });
   };
 
   const ensureLayout = () => {
@@ -276,6 +302,26 @@ export const useDeck = create<DeckState>()((set, get) => {
         base = s.review.snapshot;
         changedIds = new Set(s.review.changedIds);
         const change = s.changes.find((c) => c.id === s.review!.changeId);
+        // The arrow that implements a requested one is drawn as it will be once accepted:
+        // with the kind and label that were asked for, and the tests its requirements named.
+        const asked = new Map<Id, Partial<DeckSnapshot['edges'][number]>>();
+        for (const op of change?.operations ?? []) {
+          if (op.type !== 'add_edge') continue;
+          const real = s.review.findings.find((f) => f.opId === op.id && f.kind === 'implemented')
+            ?.targetIds[0];
+          if (!real) continue;
+          const tests = requirementTests(change!.plan, op.id, change!.operations.length);
+          asked.set(real, {
+            kind: op.kind,
+            ...(op.label ? { label: op.label } : {}),
+            ...(tests.length ? { tests } : {}),
+          });
+        }
+        if (asked.size)
+          base = {
+            ...base,
+            edges: base.edges.map((e) => (asked.has(e.id) ? { ...e, ...asked.get(e.id) } : e)),
+          };
         const missing = new Set(
           s.review.findings.filter((f) => f.kind === 'missing' && f.opId).map((f) => f.opId!),
         );
@@ -307,7 +353,7 @@ export const useDeck = create<DeckState>()((set, get) => {
       ops = s.changes.filter(isOpen).flatMap((c) => c.operations);
     }
     const applied = applyOps(withNotes(base, s.bundle.notes), ops);
-    const index = buildIndex(applied.snapshot);
+    const index = buildIndex(withGroups(applied.snapshot, s.groups));
     const exists = (id: Id | null) =>
       id !== null &&
       (index.byId.has(id) || index.linkById.has(id) || index.areaLinks.some((l) => l.id === id));
@@ -333,6 +379,7 @@ export const useDeck = create<DeckState>()((set, get) => {
         ? (bundle.layout?.positions ?? {})
         : { ...(bundle.layout?.positions ?? {}), ...prev.positions },
       pinned: first ? (bundle.layout?.pinned ?? []) : prev.pinned,
+      groups: first ? (bundle.layout?.groups ?? {}) : prev.groups,
     });
     rebuild();
   };
@@ -370,7 +417,7 @@ export const useDeck = create<DeckState>()((set, get) => {
         set((s) => ({
           progress: {
             ...s.progress,
-            [event.changeId]: [...(s.progress[event.changeId] ?? []), event.text].slice(-200),
+            [event.changeId]: [...(s.progress[event.changeId] ?? []), event.text].slice(-1000),
           },
         }));
         break;
@@ -468,6 +515,8 @@ export const useDeck = create<DeckState>()((set, get) => {
     changedIds: null,
     positions: {},
     pinned: [],
+    groups: {},
+    dropArea: null,
     laying: false,
     layoutEpoch: 0,
 
@@ -686,32 +735,100 @@ export const useDeck = create<DeckState>()((set, get) => {
       }
     },
 
-    moveNode(id, position) {
+    moveNode(id, position, toArea) {
       const s = get();
+      const node = s.index?.byId.get(id);
+      if (!s.index || !node) return;
       const before = s.positions;
-      const after = { ...before, [id]: position };
+      const d = draft();
+      const op = d?.operations.find((o) => o.id === id && o.type === 'add_block');
+      const regroup = toArea !== undefined && node.kind === 'block' && toArea !== node.parentId && !s.review;
+      let groups = s.groups;
+      if (regroup && d && op) {
+        // A block that is only requested so far: where it is asked for is part of the request.
+        upsertChange({
+          ...d,
+          operations: d.operations.map((o) =>
+            o.id === id && o.type === 'add_block' ? { ...o, parentId: toArea } : o,
+          ),
+        });
+      } else if (regroup) {
+        const home = s.bundle?.snapshot.nodes.find((n) => n.id === id)?.parentId;
+        groups = { ...groups };
+        if (toArea === home) delete groups[id];
+        else groups[id] = toArea;
+      }
+      if (regroup) {
+        set({ groups, positions: { ...before, [id]: position } });
+        rebuild();
+      }
+      // The block comes to rest clear of its neighbours, and an area it stretched makes room for itself.
+      const index = get().index ?? s.index;
+      const rest = (x: Id) => collapsedHeight(index, x);
+      const parentId = index.byId.get(id)?.parentId ?? index.system.id;
+      const placed = settle(index, before, rest, parentId, id, position);
+      const after = makeRoom(index, { ...before, [id]: placed }, rest, parentId);
       const pinnedAfter = s.pinned.includes(id) ? s.pinned : [...s.pinned, id];
       set({
         positions: after,
         pinned: pinnedAfter,
+        dropArea: null,
         undoStack: [
           ...s.undoStack,
-          { kind: 'layout' as const, before, after, pinnedBefore: s.pinned, pinnedAfter },
+          {
+            kind: 'layout' as const,
+            before,
+            after,
+            pinnedBefore: s.pinned,
+            pinnedAfter,
+            groupsBefore: s.groups,
+            groupsAfter: groups,
+          },
         ].slice(-100),
         redoStack: [],
       });
-      const d = draft();
-      const op = d?.operations.find((o) => o.id === id && o.type === 'add_block');
-      if (d && op) {
+      const now = draft();
+      if (now && op) {
         const next = {
-          ...d,
-          operations: d.operations.map((o) =>
-            o.id === id && o.type === 'add_block' ? { ...o, position } : o,
+          ...now,
+          operations: now.operations.map((o) =>
+            o.id === id && o.type === 'add_block' ? { ...o, position: placed } : o,
           ),
         };
         upsertChange(next);
         void s.source?.saveChange(next).catch(() => {});
       }
+      persistLayout();
+      if (regroup && !op) {
+        const area = index.byId.get(toArea)?.name ?? 'another area';
+        get().toast(`${node.name} is now drawn in ${area}. Its code has not moved.`);
+      }
+    },
+
+    ungroup(id) {
+      const s = get();
+      if (!s.groups[id]) return;
+      const groups = { ...s.groups };
+      delete groups[id];
+      const positions = { ...s.positions };
+      delete positions[id];
+      set({ groups, positions });
+      rebuild(); // places it afresh in the area its code lives in
+      set((st) => ({
+        undoStack: [
+          ...st.undoStack,
+          {
+            kind: 'layout' as const,
+            before: s.positions,
+            after: st.positions,
+            pinnedBefore: s.pinned,
+            pinnedAfter: st.pinned,
+            groupsBefore: s.groups,
+            groupsAfter: groups,
+          },
+        ].slice(-100),
+        redoStack: [],
+      }));
       persistLayout();
     },
 
@@ -868,7 +985,8 @@ export const useDeck = create<DeckState>()((set, get) => {
       set({ undoStack: s.undoStack.slice(0, -1), redoStack: [...s.redoStack, entry] });
       if (entry.kind === 'ops') writeDraft(entry.before, false);
       else {
-        set({ positions: entry.before, pinned: entry.pinnedBefore });
+        set({ positions: entry.before, pinned: entry.pinnedBefore, groups: entry.groupsBefore ?? s.groups });
+        if (entry.groupsBefore !== entry.groupsAfter) rebuild();
         persistLayout();
       }
     },
@@ -879,7 +997,8 @@ export const useDeck = create<DeckState>()((set, get) => {
       set({ redoStack: s.redoStack.slice(0, -1), undoStack: [...s.undoStack, entry] });
       if (entry.kind === 'ops') writeDraft(entry.after, false);
       else {
-        set({ positions: entry.after, pinned: entry.pinnedAfter });
+        set({ positions: entry.after, pinned: entry.pinnedAfter, groups: entry.groupsAfter ?? s.groups });
+        if (entry.groupsBefore !== entry.groupsAfter) rebuild();
         persistLayout();
       }
     },

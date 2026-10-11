@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } fr
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page } from '@playwright/test';
-import { ready } from './helpers';
+import { arrow, block, canvas, ready, setZoom } from './helpers';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TMP = path.join(REPO, '.e2e-tmp');
@@ -148,6 +148,33 @@ export async function waitForState(
 ): Promise<void> {
   const card = page.getByTestId('change').filter({ hasText: title });
   await expect(card.getByTestId('change-state')).toHaveText(state, { timeout });
+}
+
+/** Drag an arrow from one block to another, pick API, label it, and give it bullets (spec §9.1 step 2). */
+export async function requestApi(
+  page: Page,
+  from: string,
+  to: string,
+  label: string,
+  bullets: string[],
+): Promise<void> {
+  const a = await idOf(page, from);
+  const b = await idOf(page, to);
+  await page.evaluate(([x, y]) => window.__decker.camera.flyTo([x, y]), [a, b]);
+  await page.waitForTimeout(700);
+  if ((await canvas(page).getAttribute('data-level')) !== 'blocks') await setZoom(page, 0.62);
+  await block(page, from).hover();
+  const port = (await block(page, from).locator('.dd-port').nth(3).boundingBox())!;
+  const target = (await block(page, to).boundingBox())!;
+  await page.mouse.move(port.x + port.width / 2, port.y + port.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
+  await page.mouse.up();
+  await page.getByTestId('kind-api').click();
+  await page.getByTestId('edge-label').fill(label);
+  await page.getByTestId('edge-bullets').fill(bullets.join('\n'));
+  await page.getByTestId('edge-submit').click();
+  await expect(arrow(page, a, b)).toHaveAttribute('data-s', 'requested');
 }
 
 export async function openTray(page: Page): Promise<void> {

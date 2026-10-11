@@ -332,6 +332,81 @@ test('positions survive a reload; dragging and Tidy up work and undo', async ({ 
   await expect.poll(async () => JSON.stringify(await place())).toBe(JSON.stringify(dragged));
 });
 
+test('dragging a block into another area regroups the picture, and nothing else', async ({ page }) => {
+  const area = (name: string) => page.locator(`[data-testid="area"][data-name="${name}"]`);
+  const parentOf = (name: string) =>
+    page.evaluate((n) => {
+      const st = window.__decker.store.getState();
+      const b = st.index.blocks.find((x: { name: string }) => x.name === n);
+      return st.index.byId.get(b.parentId).name as string;
+    }, name);
+  await page.keyboard.press('0');
+  await page.waitForTimeout(500);
+  expect(await parentOf('StockAlerts')).toBe('Inventory');
+
+  // While the card is held over Catalog, that area lights up as the place it would land.
+  const card = block(page, 'StockAlerts');
+  const from = (await card.boundingBox())!;
+  const to = (await area('Catalog').boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2 + 30, from.y + 30, { steps: 4 });
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+  await expect(area('Catalog')).toHaveClass(/is-drop/);
+  await expect(area('Inventory')).not.toHaveClass(/is-drop/);
+  await page.mouse.up();
+  await expect(area('Catalog')).not.toHaveClass(/is-drop/);
+
+  // It is drawn in Catalog now, clear of its new neighbours, and no area covers another.
+  expect(await parentOf('StockAlerts')).toBe('Catalog');
+  await expect(page.getByTestId('toast')).toContainText('Its code has not moved');
+  await page.waitForTimeout(400);
+  const overlaps = await page.evaluate(() => {
+    const rect = (el: Element) => el.getBoundingClientRect();
+    const hit = (a: DOMRect, b: DOMRect) =>
+      a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+    const st = window.__decker.store.getState();
+    const out: string[] = [];
+    const tops = [...document.querySelectorAll('[data-testid="area"][data-depth="0"]')];
+    for (const a of tops)
+      for (const b of tops)
+        if (a !== b && hit(rect(a), rect(b)))
+          out.push(`${a.getAttribute('data-name')} covers ${b.getAttribute('data-name')}`);
+    const catalog = st.index.areas.find((x: { name: string }) => x.name === 'Catalog').id;
+    const cards = [...document.querySelectorAll('[data-testid="block"]')].filter(
+      (el) => st.index.byId.get(el.getAttribute('data-id'))?.parentId === catalog,
+    );
+    for (const a of cards)
+      for (const b of cards)
+        if (a !== b && hit(rect(a), rect(b)))
+          out.push(`${a.getAttribute('data-name')} covers ${b.getAttribute('data-name')}`);
+    return out;
+  });
+  expect(overlaps).toEqual([]);
+
+  // Regrouping is a change to the picture only: no operation, no request, nothing for an agent.
+  await expect(page.getByTestId('changes')).not.toContainText(/\d/);
+  await card.click();
+  await expect(page.getByTestId('regrouped')).toContainText('Catalog, by hand. Its code is in Inventory.');
+
+  // It survives a reload, undoes and redoes, and can be put back from the panel.
+  await page.waitForTimeout(500);
+  await page.reload();
+  await ready(page);
+  expect(await parentOf('StockAlerts')).toBe('Catalog');
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+Shift+z');
+  expect(await parentOf('StockAlerts')).toBe('Catalog');
+  await page.keyboard.press('0');
+  await page.waitForTimeout(400);
+  await block(page, 'StockAlerts').click();
+  await page.getByTestId('put-back').click();
+  expect(await parentOf('StockAlerts')).toBe('Inventory');
+  await expect(page.getByTestId('regrouped')).toHaveCount(0);
+  await page.keyboard.press('Control+z');
+  expect(await parentOf('StockAlerts')).toBe('Catalog');
+});
+
 test('the light theme comes from the same tokens and is remembered', async ({ page }) => {
   const bg = () =>
     page.evaluate(() => getComputedStyle(document.querySelector('.react-flow')!).backgroundColor);

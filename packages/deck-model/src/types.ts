@@ -48,6 +48,8 @@ export interface DeckEdge {
   indirect?: string; // e.g. "via StockStore" when resolved through an interface
   bullets: Bullet[];
   evidence: SourceRef[]; // the call sites or imports that establish it
+  /** Titles of the tests a change linked to this arrow's requirements (spec §3.7). Never extracted. */
+  tests?: string[];
 }
 
 export type GapReason = 'dynamic-call' | 'dynamic-import' | 'untyped' | 'parse-error' | 'unsupported';
@@ -122,6 +124,11 @@ export interface DeckLayout {
   positions: Record<Id, Point>;
   /** Blocks and areas the engineer has placed by hand. */
   pinned: Id[];
+  /**
+   * Blocks the engineer has dragged into another area, by block id. This changes only the
+   * picture: the code, the snapshot and what an agent is told all keep the block where it lives.
+   */
+  groups?: Record<Id, Id>;
 }
 
 export interface DeckNotes {
@@ -131,7 +138,7 @@ export interface DeckNotes {
   /** Summarized bullets the engineer dismissed. */
   dismissed: Id[];
   /** What an accepted arrow was asked to be: its kind and label, by edge id. */
-  edges?: Record<Id, { kind: EdgeKind; label?: string }>;
+  edges?: Record<Id, { kind: EdgeKind; label?: string; tests?: string[] }>;
 }
 
 // ---- Changes (spec §3.8, §6) ----
@@ -304,6 +311,8 @@ export interface Capabilities {
   editor: boolean;
   sandbox: 'docker' | 'podman' | 'host' | 'none';
   worker: string; // 'claude', 'scripted', or 'none'
+  /** The worker as shown to the engineer: for a model, which one and how hard it thinks. */
+  workerLabel?: string;
   summarizer: boolean;
 }
 

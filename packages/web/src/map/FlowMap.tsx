@@ -21,7 +21,7 @@ import {
 } from '@xyflow/react';
 import { Maximize2, Minus, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AREA, type Box, computeDisplay, type Display } from '../model/layout';
+import { AREA, areaAt, type Box, computeDisplay, type Display } from '../model/layout';
 import { BLOCK_W, blockHeight, collapsedHeight } from '../model/measure';
 import { currentRun, useDeck, useLevel } from '../state/store';
 import { AreaNode, AreaTitles, areaStyle, ChipContext } from './AreaNode';
@@ -346,6 +346,20 @@ function Canvas() {
     [],
   );
 
+  // Dragging a block over another area offers to regroup it there (spec §3.8). The test point
+  // is the middle of the card's title row, which is where a card is usually held.
+  const dropAt = useCallback(
+    (node: Node): { area: Box | null; ax: number; ay: number } => {
+      const parent = node.parentId ? display.get(node.parentId) : undefined;
+      const ax = (parent?.ax ?? 0) + node.position.x;
+      const ay = (parent?.ay ?? 0) + node.position.y;
+      if (node.type !== 'block') return { area: null, ax, ay };
+      const hit = areaAt(display, ax + (node.width ?? BLOCK_W) / 2, ay + 20);
+      return { area: hit && hit.id !== node.parentId ? hit : null, ax, ay };
+    },
+    [display],
+  );
+
   const onConnectEnd: OnConnectEnd = useCallback((event, state) => {
     const from = state.fromNode?.id;
     const to = state.toNode?.id;
@@ -428,9 +442,27 @@ function Canvas() {
             dragging.current = true;
             useDeck.getState().hover(null);
           }}
+          onNodeDrag={(_, node) => {
+            const st = useDeck.getState();
+            const over = st.review ? null : (dropAt(node).area?.id ?? null);
+            if (over !== st.dropArea) st.set({ dropArea: over });
+          }}
           onNodeDragStop={(_, node) => {
             dragging.current = false;
             const st = useDeck.getState();
+            const drop = st.review ? null : dropAt(node);
+            if (drop?.area) {
+              const snap = (v: number) => Math.round(v / 8) * 8;
+              st.moveNode(
+                node.id,
+                {
+                  x: Math.max(AREA.side, snap(drop.ax - drop.area.ax)),
+                  y: Math.max(AREA.top, snap(drop.ay - drop.area.ay)),
+                },
+                drop.area.id,
+              );
+              return;
+            }
             const box = display.get(node.id);
             const base = st.positions[node.id];
             const push = box && base ? box.y - base.y : 0;

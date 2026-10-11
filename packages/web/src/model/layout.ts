@@ -143,6 +143,126 @@ export function boundsOf(
   return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
 }
 
+/** The innermost area whose box contains a point, if there is one. */
+export function areaAt(display: Display, x: number, y: number): Box | null {
+  let best: Box | null = null;
+  for (const box of display.values()) {
+    if (box.kind !== 'area') continue;
+    if (x < box.ax || y < box.ay || x > box.ax + box.w || y > box.ay + box.h) continue;
+    if (!best || box.depth > best.depth) best = box;
+  }
+  return best;
+}
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** The free spot closest to where something was asked to go, among its siblings. */
+function nearestFree(others: Rect[], me: Rect, origin: Point, gap: number, want: Point): Point {
+  const free = (x: number, y: number) =>
+    others.every(
+      (o) => x + me.w + gap <= o.x || o.x + o.w + gap <= x || y + me.h + gap <= o.y || o.y + o.h + gap <= y,
+    );
+  const wx = Math.max(origin.x, want.x);
+  const wy = Math.max(origin.y, want.y);
+  if (free(wx, wy)) return { x: wx, y: wy };
+  const maxX = Math.max(wx, ...others.map((o) => o.x + o.w + gap));
+  const maxY = Math.max(wy, ...others.map((o) => o.y + o.h + gap));
+  let best: Point | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (let y = origin.y; y <= maxY; y += 8) {
+    for (let x = origin.x; x <= maxX; x += 8) {
+      const score = Math.abs(x - wx) + Math.abs(y - wy) * 1.5;
+      if (score >= bestScore || !free(x, y)) continue;
+      bestScore = score;
+      best = { x, y };
+    }
+  }
+  return best ?? { x: origin.x, y: maxY };
+}
+
+/**
+ * Where a block the engineer dropped comes to rest inside `parentId`: where it was dropped,
+ * or the closest spot that does not cover a neighbour.
+ */
+export function settle(
+  index: DeckIndex,
+  positions: Positions,
+  rest: (id: Id) => number,
+  parentId: Id,
+  id: Id,
+  want: Point,
+): Point {
+  const display = computeDisplay(index, { ...positions, [id]: want }, rest, rest);
+  const me = display.get(id);
+  if (!me) return want;
+  const others = kidsOf(index, parentId)
+    .filter((k) => k.id !== id)
+    .map((k) => display.get(k.id))
+    .filter((b): b is Box => Boolean(b));
+  if (parentId === index.system.id) return want;
+  return nearestFree(others, me, { x: AREA.side, y: AREA.top }, 24, want);
+}
+
+/**
+ * After an area has grown, move the neighbours it now covers out of its way: right or down,
+ * whichever is shorter, then the same for whatever they now cover, and so on up the map.
+ * Nothing else moves.
+ */
+export function makeRoom(
+  index: DeckIndex,
+  positions: Positions,
+  rest: (id: Id) => number,
+  areaId: Id,
+): Positions {
+  let next = positions;
+  const snap = (v: number) => Math.ceil(v / 8) * 8;
+  let cur = index.byId.get(areaId);
+  while (cur && cur.kind === 'area') {
+    const parentId = cur.parentId ?? index.system.id;
+    const top = parentId === index.system.id;
+    const gap = top ? 48 : 24;
+    const near = top ? 20 : 12; // closer than this counts as covered
+    const display = computeDisplay(index, next, rest, rest);
+    const boxes = new Map<Id, Rect>();
+    for (const kid of kidsOf(index, parentId)) {
+      const b = display.get(kid.id);
+      if (b) boxes.set(kid.id, { x: b.x, y: b.y, w: b.w, h: b.h });
+    }
+    const moved = new Set<Id>();
+    const queue: Id[] = [cur.id];
+    for (let guard = 0; queue.length > 0 && guard < 500; guard++) {
+      const pid = queue.shift()!;
+      const p = boxes.get(pid);
+      if (!p) continue;
+      for (const [id, b] of boxes) {
+        if (id === pid || id === cur.id) continue;
+        if (p.x + p.w + near <= b.x || b.x + b.w + near <= p.x) continue;
+        if (p.y + p.h + near <= b.y || b.y + b.h + near <= p.y) continue;
+        const dx = p.x + p.w + gap - b.x;
+        const dy = p.y + p.h + gap - b.y;
+        if (dx <= dy) b.x = snap(b.x + dx);
+        else b.y = snap(b.y + dy);
+        moved.add(id);
+        queue.push(id);
+      }
+    }
+    if (moved.size) {
+      next = { ...next };
+      for (const id of moved) {
+        const b = boxes.get(id)!;
+        next[id] = { x: b.x, y: b.y };
+      }
+    }
+    cur = top ? undefined : index.byId.get(parentId);
+  }
+  return next;
+}
+
 // ---- Automatic layout with ELK, off the main thread ----
 
 let elk: InstanceType<typeof ELK> | null = null;

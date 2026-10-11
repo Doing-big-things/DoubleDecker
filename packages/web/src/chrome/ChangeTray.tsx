@@ -283,7 +283,7 @@ function ChangeCard({ change }: { change: Change }) {
               disabled={!canSubmit}
               title={
                 canSubmit
-                  ? 'Send this change to a planning agent'
+                  ? `Send this change to a planning agent: ${caps?.workerLabel ?? caps?.worker}`
                   : mode === 'server'
                     ? 'No agent worker is configured'
                     : 'This map is a fixture. Run "decker <path-to-repo>" to send changes to an agent.'

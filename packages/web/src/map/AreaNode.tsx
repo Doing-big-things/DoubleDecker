@@ -39,6 +39,7 @@ export const AreaNode = memo(function AreaNode({ id, width, height }: NodeProps)
   const level = useLevel();
   const index = useDeck((s) => s.index);
   const selected = useDeck((s) => s.selectedId === id);
+  const drop = useDeck((s) => s.dropArea === id);
   const dim = useDeck((s) => level === 'system' && s.lit !== null && !s.lit.has(id));
   const band = useDeck((s) => (level === 'system' ? s.band : -1));
   const run = useDeck(currentRun);
@@ -85,7 +86,7 @@ export const AreaNode = memo(function AreaNode({ id, width, height }: NodeProps)
   return (
     <div
       role="group"
-      className={`dd-area${selected ? ' is-selected' : ''}${dim ? ' dd-dim' : ''}`}
+      className={`dd-area${selected ? ' is-selected' : ''}${drop ? ' is-drop' : ''}${dim ? ' dd-dim' : ''}`}
       style={{ '--h': hue } as React.CSSProperties}
       data-depth={Math.min(depth, 1)}
       data-testid="area"

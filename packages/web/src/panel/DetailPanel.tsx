@@ -8,6 +8,7 @@ import {
   type DeckNode,
   type Id,
   type Link,
+  linkTests,
   operationsOf,
   pathTo,
   type TestRun,
@@ -210,6 +211,11 @@ function Overview({ block, index, run }: { block: DeckNode; index: DeckIndex; ru
   const state = useDeck((s) => visualState(s, block.id));
   const baseline = useDeck((s) => s.bundle?.changedSinceBaseline.includes(block.id) ?? false);
   const commit = useDeck((s) => s.bundle?.snapshot.sourceCommit ?? '');
+  // A block dragged into another area is drawn there; its code is still where it was.
+  const home = useDeck((s) =>
+    s.groups[block.id] ? s.bundle?.snapshot.nodes.find((n) => n.id === block.id)?.parentId : undefined,
+  );
+  const homeName = home ? index.byId.get(home)?.name : undefined;
   const bullets = cardBullets(index, block.id);
   const ops = operationsOf(index, block.id);
   const data = childrenOfKind(index, block.id, 'data');
@@ -351,6 +357,22 @@ function Overview({ block, index, run }: { block: DeckNode; index: DeckIndex; ru
             'Accepted baseline'
           )}
         </dd>
+        {homeName ? (
+          <>
+            <dt>Drawn in</dt>
+            <dd data-testid="regrouped">
+              {index.byId.get(block.parentId ?? '')?.name}, by hand. Its code is in {homeName}.{' '}
+              <button
+                type="button"
+                className="dd-link-btn"
+                data-testid="put-back"
+                onClick={() => st().ungroup(block.id)}
+              >
+                Put back
+              </button>
+            </dd>
+          </>
+        ) : null}
         <dt>Extraction</dt>
         <dd>
           {block.coverage === 'full'
@@ -606,6 +628,8 @@ function LinkPanel({ link, index }: { link: Link; index: DeckIndex }) {
   const st = useDeck.getState;
   const requested = link.edges.find((e) => marks.get(e.id)?.state === 'requested');
   const bulletTarget = requested?.id ?? link.edges[0]?.id;
+  const run = useDeck(currentRun);
+  const tests = linkTests(index, link);
   const isArea = link.id.startsWith('aln:');
   return (
     <>
@@ -647,6 +671,45 @@ function LinkPanel({ link, index }: { link: Link; index: DeckIndex }) {
         {link.edges.some((e) => e.bullets.length) || requested ? <div className="dd-h">Behavior</div> : null}
         {link.edges.flatMap((e) => e.bullets.map((b) => <BulletLine key={b.id} bullet={b} ownerId={e.id} />))}
         {!isArea && bulletTarget ? <AddBullet targetId={bulletTarget} /> : null}
+
+        {tests.length ? (
+          <>
+            <div className="dd-h">
+              Tests <small>linked by its requirements</small>
+              <span style={{ marginLeft: 'auto' }}>
+                <TestsChip stats={testStats(tests, run)} />
+              </span>
+            </div>
+            {tests.map((t) => {
+              const status = run?.results[t.id] ?? 'none';
+              return (
+                <button
+                  type="button"
+                  className="dd-row"
+                  key={t.id}
+                  data-testid="panel-test"
+                  onClick={() =>
+                    st().openPeek({
+                      path: t.source.path,
+                      startLine: t.source.startLine,
+                      endLine: t.source.endLine,
+                      title: t.name,
+                    })
+                  }
+                >
+                  <span
+                    className="dd-glyph"
+                    data-s={status}
+                    title={status === 'none' ? 'not run at this commit' : status}
+                  >
+                    {GLYPH[status]}
+                  </span>
+                  <span className="dd-row-main">{t.name}</span>
+                </button>
+              );
+            })}
+          </>
+        ) : null}
 
         <div className="dd-h">
           Evidence <small>{link.edges.length}</small>

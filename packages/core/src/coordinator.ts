@@ -18,6 +18,7 @@ import {
   type Plan,
   type ReviewBundle,
   renderDeckText,
+  requirementTests,
   type ServerEvent,
   type TestRun,
   type TestStatus,
@@ -388,7 +389,12 @@ export class Coordinator {
 
       // 2. Prepare, then implement. Agent commands run only through the sandbox.
       let sandbox: Sandbox;
-      if (this.host.sandbox === 'host') sandbox = new HostSandbox(root);
+      if (this.host.sandbox === 'host')
+        sandbox = new HostSandbox(
+          root,
+          {},
+          worker.trusted ? null : this.host.settings().checks.map((c) => c.command),
+        );
       else {
         this.progress(change, 'prepare: installing dependencies in a container (install scripts disabled)');
         const prepared = await ContainerSandbox.prepare(this.containerSpec(candidate.worktree));
@@ -617,7 +623,11 @@ export class Coordinator {
         if (op.position && layout) layout.positions[real] = op.position;
       } else if (op.type === 'add_edge' && real) {
         author(real, [...op.bullets, ...(change.plan?.limits ?? []).map((l) => `Limit: ${l}`)]);
-        notes.edges = { ...notes.edges, [real]: { kind: op.kind, label: op.label } };
+        const tests = requirementTests(change.plan, op.id, change.operations.length);
+        notes.edges = {
+          ...notes.edges,
+          [real]: { kind: op.kind, label: op.label, ...(tests.length ? { tests } : {}) },
+        };
       }
     }
 

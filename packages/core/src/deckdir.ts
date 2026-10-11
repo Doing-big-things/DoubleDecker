@@ -29,7 +29,12 @@ export interface DeckSettings {
   checks: CheckSpec[];
   /** Container image for the sandbox. */
   image: string;
-  worker?: { type: 'claude' | 'scripted' | 'none'; dir?: string; model?: string };
+  worker?: {
+    type: 'claude' | 'scripted' | 'none';
+    dir?: string;
+    model?: string;
+    effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  };
   summarizer?: SummarizerConfig;
   /** Packages allowed to run install scripts during Prepare. */
   installScripts?: string[];

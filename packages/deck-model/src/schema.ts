@@ -42,6 +42,7 @@ export const edgeSchema = z.object({
   indirect: z.string().optional(),
   bullets: z.array(bulletSchema),
   evidence: z.array(sourceRefSchema),
+  tests: z.array(z.string()).optional(),
 });
 
 export const snapshotSchema = z.object({
@@ -85,13 +86,23 @@ export const layoutSchema = z.object({
   version: z.literal(1),
   positions: z.record(z.string(), point),
   pinned: z.array(id),
+  groups: z.record(z.string(), id).optional(),
 });
 
 export const notesSchema = z.object({
   version: z.literal(1),
   bullets: z.record(z.string(), z.array(bulletSchema)),
   dismissed: z.array(id),
-  edges: z.record(z.string(), z.object({ kind: edgeKindSchema, label: z.string().optional() })).optional(),
+  edges: z
+    .record(
+      z.string(),
+      z.object({
+        kind: edgeKindSchema,
+        label: z.string().optional(),
+        tests: z.array(z.string()).optional(),
+      }),
+    )
+    .optional(),
 });
 
 const shortText = z.string().trim().min(1).max(400);

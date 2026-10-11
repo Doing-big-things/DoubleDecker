@@ -27,6 +27,11 @@ export interface WorkPackage {
 
 export interface AgentWorker {
   readonly name: string;
+  /**
+   * True when the worker's commands were written by the repository's owner, not chosen by a
+   * model. Only such a worker may run arbitrary commands on a host sandbox.
+   */
+  readonly trusted?: boolean;
   /** Read-only: returns a plan through a 'plan' event. */
   plan(pkg: WorkPackage): AsyncIterable<AgentEvent>;
   /** Writes only inside pkg.worktree. Whatever diff is left there is the result. */

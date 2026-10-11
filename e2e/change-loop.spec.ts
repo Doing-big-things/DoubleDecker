@@ -4,8 +4,8 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
-import { cleanup, type Deck, idOf, openTray, startDecker, waitForState } from './decker';
-import { arrow, block, canvas, flyTo, setZoom } from './helpers';
+import { cleanup, type Deck, idOf, openTray, requestApi, startDecker, waitForState } from './decker';
+import { arrow, block, flyTo } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -52,29 +52,12 @@ test('the demo: a requested API, a flawed candidate caught by a harness test, a 
   await expect(arrow(page, orders, inventory)).toHaveCount(0);
 
   // 2. Drag an arrow from Orders to Inventory, pick API, label it, and add four bullets.
-  await page.evaluate(([a, b]) => window.__decker.camera.flyTo([a, b]), [orders, inventory]);
-  await page.waitForTimeout(700);
-  if ((await canvas(page).getAttribute('data-level')) !== 'blocks') await setZoom(page, 0.62);
-  await block(page, 'Orders').hover();
-  const port = (await block(page, 'Orders').locator('.dd-port').nth(3).boundingBox())!;
-  const target = (await block(page, 'Inventory').boundingBox())!;
-  await page.mouse.move(port.x + port.width / 2, port.y + port.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
-  await page.mouse.up();
-  await page.getByTestId('kind-api').click();
-  await page.getByTestId('edge-label').fill('Reserve stock');
-  await page
-    .getByTestId('edge-bullets')
-    .fill(
-      [
-        'Reserve every item before confirming an order',
-        'Never reserve only part of an order',
-        'Retrying the same request must not reserve stock twice',
-        'Return which items are unavailable',
-      ].join('\n'),
-    );
-  await page.getByTestId('edge-submit').click();
+  await requestApi(page, 'Orders', 'Inventory', 'Reserve stock', [
+    'Reserve every item before confirming an order',
+    'Never reserve only part of an order',
+    'Retrying the same request must not reserve stock twice',
+    'Return which items are unavailable',
+  ]);
 
   // 3. The arrow appears dashed and "Requested". Nothing has been sent to an agent.
   const requested = arrow(page, orders, inventory);
@@ -137,6 +120,9 @@ test('the demo: a requested API, a flawed candidate caught by a harness test, a 
   await expect(block(page, 'Inventory').getByTestId('tests-chip')).toContainText('✕1/11');
   await expect(block(page, 'Inventory').getByTestId('tests-chip')).toContainText('+5 new');
   await expect(block(page, 'StockStore')).toHaveClass(/dd-unchanged/);
+  // The new arrow carries the tests its requirements named: one of the four is failing.
+  const reviewPill = page.getByTestId('arrow-pill').filter({ hasText: 'Reserve stock' });
+  await expect(reviewPill.getByTestId('arrow-tests')).toHaveText('✕1/4');
   // Holding B shows the map before the change.
   await page.keyboard.down('b');
   await expect(page.getByTestId('review-banner')).toContainText('Before the change');
@@ -184,6 +170,12 @@ test('the demo: a requested API, a flawed candidate caught by a harness test, a 
   ).toHaveAttribute('data-o', 'authored');
   await expect(page.getByTestId('panel')).toContainText('Limit: Should a reservation expire? No expiry');
   await expect(page.getByTestId('panel')).toContainText('Limit: Where are reservations kept? In memory');
+  // The arrow keeps the tests that were linked to its requirements, behind a chip on its pill.
+  await expect(pill.getByTestId('arrow-tests')).toHaveText('✓4');
+  await expect(page.getByTestId('panel-test')).toHaveCount(4);
+  await expect(
+    page.getByTestId('panel-test').filter({ hasText: 'reserves nothing when one item is short' }),
+  ).toBeVisible();
   // Tests chips come from the harness run on exactly this code.
   await expect(block(page, 'Inventory').getByTestId('tests-chip')).toHaveText('✓11');
   // The lower deck: real commits on the working branch, and a clean tree.

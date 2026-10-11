@@ -15,6 +15,7 @@ import {
   type Plan,
   type TestDelta,
   type TestStatus,
+  testsNamed,
 } from '@decker/deck-model';
 
 export interface ReconcileInput {
@@ -201,10 +202,7 @@ export function reconcile(input: ReconcileInput): Reconciled {
   const contradicted: string[] = [];
   for (const r of input.plan?.requirements ?? []) {
     if (r.opId) covered.add(r.opId);
-    const wanted = r.test ? norm(r.test) : '';
-    const tests = wanted
-      ? input.candidate.tests.filter((t) => norm(t.name) === wanted || norm(t.name).includes(wanted))
-      : [];
+    const tests = r.test ? testsNamed(input.candidate.tests, [r.test]) : [];
     const failed = tests.filter((t) => input.results[t.id] === 'failed');
     const passed = tests.filter((t) => input.results[t.id] === 'passed');
     const targetIds = [

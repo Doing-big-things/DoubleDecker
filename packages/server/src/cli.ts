@@ -13,6 +13,8 @@ Compiles a TypeScript repository up to a map, and serves the map on 127.0.0.1.
   --sandbox <kind>    docker, podman, host, or none (default: whichever container runtime answers)
                       "host" runs checks and agent commands on this machine with no isolation
   --worker <name>     claude, scripted, or none (default: from .deck/deck.json, else claude)
+  --model <id>        Model for the claude worker (default: from .deck/deck.json, else claude-opus-5-5)
+  --effort <level>    low, medium, high, xhigh, or max (default: the model's own)
   --token <t>         Use a fixed session token instead of a random one
   --no-watch          Do not watch the repository for changes
 `;
@@ -41,6 +43,8 @@ export async function main(argv: string[]): Promise<void> {
   const port = flag('port');
   const sandbox = flag('sandbox') as SandboxKind | undefined;
   const worker = flag('worker') as 'claude' | 'scripted' | 'none' | undefined;
+  const model = flag('model');
+  const effort = flag('effort') as 'low' | 'medium' | 'high' | 'xhigh' | 'max' | undefined;
   const token = flag('token');
   const target = args[0];
   if (!target) {
@@ -50,6 +54,8 @@ export async function main(argv: string[]): Promise<void> {
   }
   if (sandbox && !['docker', 'podman', 'host', 'none'].includes(sandbox))
     throw new Error(`Unknown sandbox "${sandbox}".`);
+  if (effort && !['low', 'medium', 'high', 'xhigh', 'max'].includes(effort))
+    throw new Error(`Unknown effort "${effort}".`);
 
   const started = Date.now();
   const server = await startServer({
@@ -58,6 +64,8 @@ export async function main(argv: string[]): Promise<void> {
     token,
     sandbox: sandbox ?? 'auto',
     worker: worker ?? 'auto',
+    model,
+    effort,
     watch: !noWatch,
     allowOrigins: process.env.DECKER_DEV_ORIGIN ? [process.env.DECKER_DEV_ORIGIN] : [],
   });
@@ -74,6 +82,8 @@ export async function main(argv: string[]): Promise<void> {
     console.log(
       'decker: no container runtime answered. The map works; running checks and agents needs Docker or Podman, or --sandbox=host.',
     );
+  if (server.service.workerName === 'claude')
+    console.log(`decker: changes go to ${server.service.workerLabel}.`);
   console.log(`decker: ${server.url}`);
 
   if (!noOpen) {

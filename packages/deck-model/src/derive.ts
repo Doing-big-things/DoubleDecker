@@ -8,6 +8,7 @@ import type {
   EdgeKind,
   Gap,
   Id,
+  Plan,
   TestRun,
 } from './types.ts';
 
@@ -83,9 +84,64 @@ export function withNotes(snapshot: DeckSnapshot, notes: DeckNotes | null): Deck
     edges: snapshot.edges.map((e) => {
       const noted = apply(e);
       const mark = marked[e.id];
-      return mark ? { ...noted, kind: mark.kind, label: mark.label ?? noted.label } : noted;
+      return mark
+        ? {
+            ...noted,
+            kind: mark.kind,
+            label: mark.label ?? noted.label,
+            ...(mark.tests?.length ? { tests: mark.tests } : {}),
+          }
+        : noted;
     }),
   };
+}
+
+const normTitle = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/** The tests a plan named, found by title. A plan may give a title in part. */
+export function testsNamed(tests: readonly DeckTest[], titles: readonly string[]): DeckTest[] {
+  const wanted = titles.map(normTitle).filter(Boolean);
+  if (wanted.length === 0) return [];
+  return tests.filter((t) => {
+    const name = normTitle(t.name);
+    return wanted.some((w) => name === w || name.includes(w));
+  });
+}
+
+/**
+ * The test titles a plan links to one operation of a change: the requirements that name that
+ * operation, or every requirement when the change has only the one operation.
+ */
+export function requirementTests(plan: Plan | undefined, opId: Id, opCount: number): string[] {
+  const out: string[] = [];
+  for (const r of plan?.requirements ?? []) {
+    if (!r.test) continue;
+    if (r.opId === opId || (!r.opId && opCount === 1)) out.push(r.test);
+  }
+  return out;
+}
+
+/** The tests hanging off an arrow: the ones a change linked to its requirements. */
+export function linkTests(index: DeckIndex, link: Link): DeckTest[] {
+  if (!link.edges.some((e) => e.tests?.length)) return [];
+  return testsNamed(
+    index.snapshot.tests,
+    link.edges.flatMap((e) => e.tests ?? []),
+  );
+}
+
+/** Draw regrouped blocks in the area the engineer dragged them to. Returns a new snapshot. */
+export function withGroups(snapshot: DeckSnapshot, groups: Record<Id, Id> | undefined): DeckSnapshot {
+  if (!groups || Object.keys(groups).length === 0) return snapshot;
+  const areas = new Set(snapshot.nodes.filter((n) => n.kind === 'area').map((n) => n.id));
+  let moved = false;
+  const nodes = snapshot.nodes.map((n) => {
+    const to = groups[n.id];
+    if (n.kind !== 'block' || !to || to === n.parentId || !areas.has(to)) return n;
+    moved = true;
+    return { ...n, parentId: to };
+  });
+  return moved ? { ...snapshot, nodes } : snapshot;
 }
 
 export function buildIndex(snapshot: DeckSnapshot): DeckIndex {

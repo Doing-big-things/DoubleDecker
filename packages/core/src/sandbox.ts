@@ -73,17 +73,38 @@ const HOST_ENV = [
   'LANG',
 ];
 
+/**
+ * Whether a command is one of the permitted ones, optionally with more arguments, and
+ * nothing that would chain a second command onto it.
+ */
+export function permitted(command: string, allow: readonly string[]): boolean {
+  const text = command.trim();
+  if (/[;&|<>`^%\n\r]|\$\(/.test(text)) return false;
+  return allow.some((a) => text === a.trim() || text.startsWith(`${a.trim()} `));
+}
+
 /** No isolation: commands run on this machine, in the worktree, with a scrubbed environment. */
 export class HostSandbox implements Sandbox {
   private cwd: string;
   private extraEnv: Record<string, string>;
+  private allow: readonly string[] | null;
 
-  constructor(cwd: string, extraEnv: Record<string, string> = {}) {
+  /**
+   * `allow` limits what may run to those commands, with extra arguments. A model's commands
+   * are limited this way, because nothing else stands between them and this machine.
+   */
+  constructor(cwd: string, extraEnv: Record<string, string> = {}, allow: readonly string[] | null = null) {
     this.cwd = cwd;
     this.extraEnv = extraEnv;
+    this.allow = allow;
   }
 
   run(command: string): Promise<RunResult> {
+    if (this.allow && !permitted(command, this.allow))
+      return Promise.resolve({
+        exitCode: 126,
+        output: `Not run. This sandbox has no isolation, so only these commands are available, each optionally followed by more arguments: ${this.allow.join(' | ')}`,
+      });
     const env: Record<string, string> = { CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' };
     for (const key of HOST_ENV) if (process.env[key]) env[key] = process.env[key]!;
     return collect(

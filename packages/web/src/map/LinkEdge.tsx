@@ -1,8 +1,16 @@
-import type { DeckIndex, FindingKind, Id, Link } from '@decker/deck-model';
+import {
+  chipLabel,
+  type DeckIndex,
+  type FindingKind,
+  type Id,
+  type Link,
+  linkTests,
+  testStats,
+} from '@decker/deck-model';
 import { EdgeLabelRenderer, type EdgeProps, useInternalNode } from '@xyflow/react';
 import { memo } from 'react';
 import { linkMark, pendingInLink } from '../model/pending';
-import { type DeckState, useDeck, useLevel } from '../state/store';
+import { currentRun, type DeckState, useDeck, useLevel } from '../state/store';
 import { StateBadge } from './BlockNode';
 import { BANDS } from './camera';
 import { type Rect, route } from './geometry';
@@ -61,6 +69,12 @@ export const LinkEdge = memo(function LinkEdge({ id, source, target, data }: Edg
   const dim = useDeck((s) => s.lit !== null && !s.lit.has(id));
   const state = useDeck((s) => (link ? linkState(s, link) : undefined));
   const pending = useDeck((s) => (link ? pendingInLink(link, s.marks) : 0));
+  // The tests a change linked to this arrow's requirements, as "state|label". Empty for most arrows.
+  const tests = useDeck((s) => {
+    if (!link || !s.index || !link.edges.some((e) => e.tests)) return '';
+    const stats = testStats(linkTests(s.index, link), currentRun(s));
+    return stats.total ? `${stats.state}|${chipLabel(stats)}` : '';
+  });
   const unchanged = useDeck(
     (s) =>
       s.changedIds !== null &&
@@ -128,6 +142,16 @@ export const LinkEdge = memo(function LinkEdge({ id, source, target, data }: Edg
             {link.count > 1 || level === 'system' ? (
               <span className="dd-edge-count">
                 {level === 'system' && !label ? link.count : `×${link.count}`}
+              </span>
+            ) : null}
+            {tests && level === 'blocks' ? (
+              <span
+                className="dd-chip"
+                data-s={tests.split('|')[0]}
+                data-testid="arrow-tests"
+                title="Tests linked to this arrow's requirements"
+              >
+                {tests.split('|')[1]}
               </span>
             ) : null}
             <StateBadge state={state} />

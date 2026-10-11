@@ -49,6 +49,9 @@ import { watch } from 'chokidar';
 export interface ServiceOptions {
   sandbox?: SandboxKind | 'auto';
   worker?: 'claude' | 'scripted' | 'none' | 'auto';
+  /** Overrides for the Claude worker's model and effort in .deck/deck.json. */
+  model?: string;
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   watch?: boolean;
 }
 
@@ -64,6 +67,8 @@ export class DeckService implements DeckHost {
   readonly sandbox: SandboxKind;
   readonly coordinator: Coordinator;
   readonly workerName: string;
+  /** The worker and, for a model, which one and how hard it thinks. */
+  readonly workerLabel: string;
   private adapter: TypeScriptAdapter;
   private current!: DeckSnapshot;
   private currentIds!: IdsFile;
@@ -102,8 +107,16 @@ export class DeckService implements DeckHost {
     if (wanted === 'scripted') {
       const scripted = new ScriptedWorker(path.resolve(this.root, settings.worker?.dir ?? 'demo'));
       worker = scripted.available ? scripted : null;
-    } else if (wanted === 'claude') worker = new ClaudeWorker({ model: settings.worker?.model });
+    } else if (wanted === 'claude')
+      worker = new ClaudeWorker({
+        model: options.model ?? settings.worker?.model,
+        effort: options.effort ?? settings.worker?.effort,
+      });
     this.workerName = worker?.name ?? 'none';
+    this.workerLabel =
+      worker instanceof ClaudeWorker
+        ? `claude (${worker.model}${worker.effort ? `, ${worker.effort} effort` : ''})`
+        : this.workerName;
     this.coordinator = new Coordinator(this, this.gitRoot ? worker : null);
     this.summaries = this.dir.readCache<Record<string, CachedSummary>>('summaries.json') ?? {};
   }
@@ -186,6 +199,7 @@ export class DeckService implements DeckHost {
         editor: true,
         sandbox: this.sandbox,
         worker: this.workerName,
+        workerLabel: this.workerLabel,
         summarizer: Boolean(this.settings().summarizer),
       },
       changedSinceBaseline: this.current.nodes

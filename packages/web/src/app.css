@@ -345,8 +345,14 @@ button {
 .react-flow__node {
   cursor: default;
 }
+/* A card being dragged is lifted above everything, with the only shadow on the map. */
 .react-flow__node.draggable.dragging {
   cursor: grabbing;
+  z-index: 2000 !important;
+}
+.react-flow__node.draggable.dragging .dd-block {
+  border-color: var(--accent);
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.42);
 }
 .react-flow__attribution {
   display: none;
@@ -437,9 +443,11 @@ button {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
+/* Where a block being dragged would land. Solid, because dashes always mean "requested". */
 .dd-area.is-drop {
-  border-style: dashed;
-  border-color: var(--requested);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  background: hsl(var(--h) 62% 62% / calc(var(--area-fill) * 2.2));
 }
 .dd-area-title {
   position: absolute;

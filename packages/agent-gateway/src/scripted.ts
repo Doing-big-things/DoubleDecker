@@ -30,6 +30,7 @@ function textOf(op: ChangeOp): string {
 
 export class ScriptedWorker implements AgentWorker {
   readonly name = 'scripted';
+  readonly trusted = true;
   private scenarios: Scenario[] = [];
 
   constructor(dir: string) {
