@@ -85,11 +85,14 @@ export async function smallText(page: Page): Promise<string[]> {
   });
 }
 
-/** Frame times while an action runs, as the 95th percentile in frames per second. */
+/**
+ * Frame times while an action runs: the 95th percentile and the median in frames per second,
+ * and the longest single frame in milliseconds.
+ */
 export async function measureFps(
   page: Page,
   action: () => Promise<void>,
-): Promise<{ p95: number; median: number; frames: number }> {
+): Promise<{ p95: number; median: number; frames: number; worst: number }> {
   await page.evaluate(() => {
     const w = window as unknown as { __frames: number[]; __raf: number };
     w.__frames = [];
@@ -107,6 +110,11 @@ export async function measureFps(
     cancelAnimationFrame(w.__raf);
     const sorted = [...w.__frames].slice(2).sort((a, b) => a - b);
     const at = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))] ?? 16;
-    return { p95: Math.round(1000 / at(0.95)), median: Math.round(1000 / at(0.5)), frames: sorted.length };
+    return {
+      p95: Math.round(1000 / at(0.95)),
+      median: Math.round(1000 / at(0.5)),
+      frames: sorted.length,
+      worst: Math.round(sorted.at(-1) ?? 0),
+    };
   });
 }

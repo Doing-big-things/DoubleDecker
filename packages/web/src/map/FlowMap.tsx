@@ -51,6 +51,8 @@ function handlesFor(w: number, h: number, block: boolean): NodeHandle[] {
   ];
   if (block) {
     // Declared up front so nothing has to be measured, including the ports a connection starts from.
+    // Arrows attach to these declared bounds, so areas, and cards shown by name only, mount no
+    // handle elements at all.
     anchors.push(
       { id: 'in', type: 'target', position: Position.Top, x: 0, y: 0, width: w, height: h },
       { id: 'pt', type: 'source', position: Position.Top, x: w / 2 - 5, y: -5, width: 10, height: 10 },

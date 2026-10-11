@@ -1,4 +1,5 @@
-// The generated stress fixture: about 1,500 blocks and 4,000 arrows (spec §10).
+// The generated fixtures for the performance budgets (spec §10): the stress map of about
+// 1,500 blocks and 4,000 arrows, and a mid-sized one of 300 blocks and 600 arrows.
 import type { DeckBundle } from '@decker/deck-model';
 import { type BlockSpec, DeckBuilder, op } from './dsl.ts';
 
@@ -91,17 +92,23 @@ const VERBS = [
   'rebuild',
 ];
 
-export function buildStress(blockTarget = 1500, edgeTarget = 4000): DeckBundle {
+export function buildStress(
+  blockTarget = 1500,
+  edgeTarget = 4000,
+  name = 'stress',
+  domainCount = DOMAINS.length,
+): DeckBundle {
   const rand = mulberry32(20261011);
+  const domains = DOMAINS.slice(0, domainCount);
   const pick = <T>(list: readonly T[]): T => list[Math.floor(rand() * list.length)]!;
-  const d = new DeckBuilder('stress');
+  const d = new DeckBuilder(name);
 
-  const perArea = Math.ceil(blockTarget / (DOMAINS.length * PARTS.length));
+  const perArea = Math.ceil(blockTarget / (domains.length * PARTS.length));
   const names: string[] = [];
   const opsOf = new Map<string, string[]>();
   const plan: { domain: string; part: string; name: string; spec: BlockSpec }[] = [];
 
-  for (const domain of DOMAINS) {
+  for (const domain of domains) {
     for (const part of PARTS) {
       for (let i = 0; i < perArea && names.length < blockTarget; i++) {
         let name = `${domain}${pick(NOUNS)}${pick(ROLES)}`;
@@ -148,7 +155,7 @@ export function buildStress(blockTarget = 1500, edgeTarget = 4000): DeckBundle {
     edges += 1;
   }
 
-  for (const domain of DOMAINS) {
+  for (const domain of domains) {
     d.area(domain, () => {
       for (const part of PARTS) {
         d.area(part, () => {

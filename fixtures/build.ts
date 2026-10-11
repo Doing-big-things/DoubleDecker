@@ -11,7 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(here, '..', 'packages', 'web', 'public', 'fixtures');
 mkdirSync(publicDir, { recursive: true });
 
-const fixtures = { shop: buildShop(), stress: buildStress() };
+const fixtures = { shop: buildShop(), mid: buildStress(300, 600, 'mid', 8), stress: buildStress() };
 
 for (const [name, bundle] of Object.entries(fixtures)) {
   snapshotSchema.parse(bundle.snapshot);

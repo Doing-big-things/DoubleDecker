@@ -1,5 +1,5 @@
 import { blocksUnder, type DeckIndex, fnv1a, type Id, testStats } from '@decker/deck-model';
-import { Handle, type NodeProps, Position } from '@xyflow/react';
+import type { NodeProps } from '@xyflow/react';
 import { createContext, memo, useContext, useMemo } from 'react';
 import { areaExternals } from '../model/layout';
 import { currentRun, useDeck, useLevel } from '../state/store';
@@ -156,8 +156,6 @@ export const AreaNode = memo(function AreaNode({ id, width, height }: NodeProps)
           })}
         </div>
       ) : null}
-      <Handle type="source" id="cs" position={Position.Bottom} className="dd-anchor" isConnectable={false} />
-      <Handle type="target" id="ct" position={Position.Top} className="dd-anchor" isConnectable={false} />
     </div>
   );
 });

@@ -2,7 +2,7 @@
 declare global {
   interface Window {
     // biome-ignore lint/suspicious/noExplicitAny: the page's internals are untyped from here
-    __decker: { store: { getState(): any }; camera: any };
+    __decker: { store: { getState(): any }; camera: any; bands: readonly number[] };
   }
 }
 

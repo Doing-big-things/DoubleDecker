@@ -71,25 +71,39 @@ export const LinkEdge = memo(function LinkEdge({ id, source, target, data }: Edg
   const b = rectOf(useInternalNode(target));
   const link = useDeck((s) => (s.index ? linkOf(s.index, id) : undefined));
   const band = useDeck((s) => s.band);
-  const selected = useDeck((s) => s.selectedId === id);
-  const near = useDeck((s) => s.selectedId !== null && (s.selectedId === source || s.selectedId === target));
-  const lit = useDeck((s) => s.lit?.has(id) ?? false);
-  const dim = useDeck((s) => s.lit !== null && !s.lit.has(id));
-  const state = useDeck((s) => (link ? linkState(s, link) : undefined));
-  const pending = useDeck((s) => (link ? pendingInLink(link, s.marks) : 0));
-  // The tests a change linked to this arrow's requirements, as "state|label". Empty for most arrows.
-  const tests = useDeck((s) => {
-    if (!link || !s.index || !link.edges.some((e) => e.tests)) return '';
-    const stats = testStats(linkTests(s.index, link), currentRun(s));
-    return stats.total ? `${stats.state}|${chipLabel(stats)}` : '';
+  // Everything else an arrow's look depends on, through one subscription: a map can have
+  // hundreds of arrows on screen, and each subscription is paid for when one comes into view.
+  const look = useDeck((s) => {
+    if (!link) return '';
+    const sel = s.selectedId;
+    // The tests a change linked to this arrow's requirements. None, for most arrows.
+    let chip = '';
+    if (s.index && link.edges.some((e) => e.tests)) {
+      const stats = testStats(linkTests(s.index, link), currentRun(s));
+      if (stats.total) chip = `${stats.state}|${chipLabel(stats)}`;
+    }
+    const same =
+      s.changedIds !== null && !s.changedIds.has(id) && !link.edges.some((e) => s.changedIds!.has(e.id));
+    return [
+      sel === id ? 1 : 0,
+      sel !== null && (sel === source || sel === target) ? 1 : 0,
+      s.lit?.has(id) ? 1 : 0,
+      s.lit !== null && !s.lit.has(id) ? 1 : 0,
+      same ? 1 : 0,
+      pendingInLink(link, s.marks),
+      linkState(s, link) ?? '',
+      chip,
+    ].join('\u0001');
   });
-  const unchanged = useDeck(
-    (s) =>
-      s.changedIds !== null &&
-      link !== undefined &&
-      !s.changedIds.has(id) &&
-      !link.edges.some((e) => s.changedIds!.has(e.id)),
-  );
+  const part = look.split('\u0001');
+  const selected = part[0] === '1';
+  const near = part[1] === '1';
+  const lit = part[2] === '1';
+  const dim = part[3] === '1';
+  const unchanged = part[4] === '1';
+  const pending = Number(part[5] ?? 0);
+  const state = part[6] || undefined;
+  const tests = part[7] ?? '';
 
   if (!a || !b || !link) return null;
   const scale = Math.max(1, 0.9 / BANDS[band]!);

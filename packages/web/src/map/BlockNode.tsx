@@ -420,7 +420,6 @@ export const BlockNode = memo(function BlockNode({ id, height }: NodeProps) {
             <StateBadge state={state} />
           </div>
         ) : null}
-        <Ports />
       </div>
     );
   }
