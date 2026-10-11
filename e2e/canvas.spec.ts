@@ -304,6 +304,22 @@ test('the outline is the same deck as a searchable tree', async ({ page, context
   await expect(outline).toHaveCount(0);
 });
 
+test('a map first drawn in a sliver of a window fits itself once it has room', async ({ page }) => {
+  // Opened in the background, or in a pane that is not showing yet, the canvas has no size.
+  await page.setViewportSize({ width: 1440, height: 90 });
+  await page.reload();
+  await page.waitForSelector('[data-testid="app"][data-status="ready"]');
+  await page.waitForTimeout(800);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(canvas(page)).toHaveAttribute('data-level', 'architecture');
+  await expect(page.getByTestId('block')).toHaveCount(42);
+  // After that the camera is left alone: opening the panel does not refit the map.
+  const before = await zoom(page);
+  await block(page, 'Inventory').click();
+  await page.waitForTimeout(400);
+  expect(await zoom(page)).toBeCloseTo(before, 3);
+});
+
 test('positions survive a reload; dragging and Tidy up work and undo', async ({ page }) => {
   await flyTo(page, 'Money');
   await page.keyboard.press('Escape');

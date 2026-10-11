@@ -82,6 +82,9 @@ function makeNode(box: Box, x: number, y: number, w: number, h: number): Node {
   };
 }
 
+/** Whether the canvas is big enough for fitting the map to it to mean anything. */
+const hasRoom = (el: HTMLElement | null) => (el?.clientWidth ?? 0) >= 120 && (el?.clientHeight ?? 0) >= 120;
+
 const roundRect = (x: number, y: number, w: number, h: number, r: number) =>
   `M${x + r},${y}h${w - 2 * r}a${r},${r} 0 0 1 ${r},${r}v${h - 2 * r}a${r},${r} 0 0 1 ${-r},${r}h${-(w - 2 * r)}a${r},${r} 0 0 1 ${-r},${-r}v${-(h - 2 * r)}a${r},${r} 0 0 1 ${r},${-r}z`;
 
@@ -314,11 +317,28 @@ function Canvas() {
 
   // --- Camera.
   const fitted = useRef(-1);
+  const roomAtFit = useRef(false);
   useEffect(() => {
     if (display.size === 0 || fitted.current === layoutEpoch) return;
     fitted.current = layoutEpoch;
-    requestAnimationFrame(() => camera.fit(false));
+    requestAnimationFrame(() => {
+      roomAtFit.current = hasRoom(wrap.current);
+      camera.fit(false);
+    });
   }, [display, layoutEpoch]);
+  // A map first drawn while its window was hidden, or a sliver, was fitted to nothing. It is
+  // fitted again the first time it has room. After that the camera is the engineer's.
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      if (roomAtFit.current || fitted.current < 0 || !hasRoom(wrap.current)) return;
+      roomAtFit.current = true;
+      camera.fit(false);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const bandRef = useRef(band);
   bandRef.current = band;

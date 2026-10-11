@@ -12,14 +12,14 @@ Built on 2026-10-11, straight through from M0 at Jay's instruction, without the 
 
 | Milestone | State | Verified by |
 |---|---|---|
-| **M0** The canvas | Built | `e2e/canvas.spec.ts`, 14 tests |
+| **M0** The canvas | Built | `e2e/canvas.spec.ts`, 15 tests |
 | **M1** Compile up | Built | `e2e/compile-up.spec.ts`, 6 tests. Hono and Supabase Storage runs and the hand-checked sample are recorded in `fixtures/repos.json` |
 | **M2** Edit the deck | Built | The editing and regrouping tests in `e2e/canvas.spec.ts`, with stored reference images |
 | **M3** The agent loop | Built. Verified with stored candidates in host-sandbox mode only | `e2e/change-loop.spec.ts`, 6 tests |
 | **M4** Trust | Built, except what needs a container or a real model | Same suite, plus `e2e/integration-tier.spec.ts`, 3 tests |
 | **M5** Prove and extend | Not started | |
 
-All 29 of those tests pass. A 30th, `e2e/live-agent.spec.ts`, is described below and has not passed.
+All 30 of those tests pass. A 31st, `e2e/live-agent.spec.ts`, is described below and has not passed.
 
 **Not verified.** These are written and have never run to completion:
 
@@ -46,6 +46,7 @@ All 29 of those tests pass. A 30th, `e2e/live-agent.spec.ts`, is described below
 | How arrows are drawn | Each straight run and each rounded corner is a path of its own | A browser draws one long bent line through a mask the size of its bounding box, every frame. With 140 on screen that was most of a frame |
 | Minimap | Our own: areas only, one subscription to the camera | React Flow's keeps a component per node, re-evaluated on every camera frame |
 | State badges on blocks | Hang on the card's top edge | In the title row they pushed the name out |
+| First fit | A map first drawn while its window is hidden or a sliver is fitted again the first time it has room | It was fitted to a canvas of no size and stayed a speck at 5% |
 | Regrouping (§3.8) | Dragging a block over another area lights that area up and regroups the block there. The move is kept in `.deck/layout.json`, the panel says where the code still lives, and "Put back" undoes it. Neighbours make room | The spec left where a regrouping is stored to "area rules". Layout is where every other hand placement lives, and agents are still told where the code really is |
 | Tests on arrows (§3.7) | An API arrow's label carries a chip for the tests its requirements named, in review and after acceptance | Built as specified. In review the arrow is also drawn with the kind and label that were asked for |
 | A chip whose tests were all skipped | Reads `–3` | It read `✓0/3` in green, which looks like a pass |
