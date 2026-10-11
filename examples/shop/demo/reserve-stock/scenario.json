@@ -1,0 +1,19 @@
+{
+  "match": "reserve",
+  "plan": {
+    "interpretation": "Orders will reserve stock through a new Inventory operation, reserve(orderId, items, idempotencyKey), before it charges the customer. A reservation covers every item of the order or none of them, and repeating a request with the same key returns the first reservation.",
+    "requirements": [
+      { "id": "req_every", "text": "Every item of an order is reserved before the order is confirmed", "test": "reserves every item before confirming" },
+      { "id": "req_atomic", "text": "When any item is short, nothing is reserved", "test": "reserves nothing when one item is short" },
+      { "id": "req_idempotent", "text": "Retrying the same request does not reserve stock twice", "test": "does not reserve twice for a repeated key" },
+      { "id": "req_report", "text": "The caller is told which items are unavailable", "test": "reports which items are unavailable" }
+    ],
+    "files": ["src/inventory/index.ts", "src/inventory/index.test.ts", "src/orders/index.ts", "src/orders/index.test.ts", "src/http/app.ts"],
+    "checks": ["typecheck", "tests"],
+    "questions": [
+      { "id": "q_expiry", "text": "Should a reservation expire?", "options": ["No expiry", "After 15 minutes"] },
+      { "id": "q_persistence", "text": "Where are reservations kept?", "options": ["In memory", "In the database"] }
+    ]
+  },
+  "candidates": ["c1-flawed", "c2-atomic"]
+}

@@ -1,0 +1,17 @@
+[
+  {
+    "file": "src/inventory/index.ts",
+    "find": "    if (next < 0) throw invalid(`Stock for ${sku} cannot go below zero`);\n",
+    "replace": ""
+  },
+  {
+    "file": "src/inventory/index.ts",
+    "find": "  /** Adjust stock by hand, never below zero. */",
+    "replace": "  /** Adjust stock by hand. The balance may go negative. */"
+  },
+  {
+    "file": "src/inventory/index.test.ts",
+    "find": "  it('never lets stock go below zero', () => {\n    expect(() => inventory.adjust('mug', -6)).toThrow('below zero');\n    expect(inventory.available('mug')).toBe(5);\n  });",
+    "replace": "  it('allows a negative balance', () => {\n    inventory.adjust('mug', -6);\n    expect(inventory.available('mug')).toBe(-1);\n  });"
+  }
+]

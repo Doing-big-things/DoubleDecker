@@ -1,0 +1,11 @@
+{
+  "match": "low stock",
+  "plan": {
+    "interpretation": "Inventory gains a way to ask whether a product is running low. Fewer than three units counts as low.",
+    "requirements": [{ "id": "req_low", "text": "A product with fewer than three units counts as low", "test": "flags low stock" }],
+    "files": ["src/inventory/index.ts", "src/inventory/index.test.ts"],
+    "checks": ["typecheck", "tests"],
+    "questions": []
+  },
+  "candidates": ["c1"]
+}

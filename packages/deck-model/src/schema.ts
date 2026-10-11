@@ -91,6 +91,7 @@ export const notesSchema = z.object({
   version: z.literal(1),
   bullets: z.record(z.string(), z.array(bulletSchema)),
   dismissed: z.array(id),
+  edges: z.record(z.string(), z.object({ kind: edgeKindSchema, label: z.string().optional() })).optional(),
 });
 
 const shortText = z.string().trim().min(1).max(400);

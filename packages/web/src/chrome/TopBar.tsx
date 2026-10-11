@@ -18,7 +18,7 @@ export function TopBar() {
 
   const total = stats ? stats.callSites + stats.imports : 0;
   const resolved = stats ? stats.resolvedCallSites + stats.resolvedImports : 0;
-  const pct = total ? Math.round((resolved / total) * 100) : 100;
+  const pct = total ? Math.floor((resolved / total) * 100) : 100;
 
   return (
     <header className="dd-top">

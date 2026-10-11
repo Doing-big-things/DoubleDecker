@@ -67,7 +67,8 @@ function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
 export function withNotes(snapshot: DeckSnapshot, notes: DeckNotes | null): DeckSnapshot {
   if (!notes) return snapshot;
   const dismissed = new Set(notes.dismissed);
-  const hasNotes = Object.keys(notes.bullets).length > 0 || dismissed.size > 0;
+  const marked = notes.edges ?? {};
+  const hasNotes = Object.keys(notes.bullets).length > 0 || dismissed.size > 0 || Object.keys(marked).length > 0;
   if (!hasNotes) return snapshot;
   const apply = <T extends { id: Id; bullets: Bullet[] }>(item: T): T => {
     const extra = notes.bullets[item.id];
@@ -75,7 +76,15 @@ export function withNotes(snapshot: DeckSnapshot, notes: DeckNotes | null): Deck
     if (!extra && kept.length === item.bullets.length) return item;
     return { ...item, bullets: [...(extra ?? []), ...kept] };
   };
-  return { ...snapshot, nodes: snapshot.nodes.map(apply), edges: snapshot.edges.map(apply) };
+  return {
+    ...snapshot,
+    nodes: snapshot.nodes.map(apply),
+    edges: snapshot.edges.map((e) => {
+      const noted = apply(e);
+      const mark = marked[e.id];
+      return mark ? { ...noted, kind: mark.kind, label: mark.label ?? noted.label } : noted;
+    }),
+  };
 }
 
 export function buildIndex(snapshot: DeckSnapshot): DeckIndex {

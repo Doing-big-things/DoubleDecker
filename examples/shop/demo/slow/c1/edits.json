@@ -1,0 +1,6 @@
+[
+  {
+    "file": "src/shared/ids.ts",
+    "append": "\n/** Read the prefix of an identifier. */\nexport function prefixOf(id: string): string {\n  return id.split('_')[0] ?? '';\n}\n"
+  }
+]

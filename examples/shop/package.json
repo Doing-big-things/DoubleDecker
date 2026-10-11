@@ -1,0 +1,16 @@
+{
+  "name": "shop-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Double Decker reference service: a small shop, written to be mapped and changed.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

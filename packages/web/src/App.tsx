@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ChangeTray } from './chrome/ChangeTray';
 import { Outline } from './chrome/Outline';
 import { Palette } from './chrome/Palette';
@@ -54,6 +54,31 @@ function Help() {
   );
 }
 
+function Renames() {
+  const renames = useDeck((s) => s.bundle?.renames);
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const open = (renames ?? []).filter((r) => !dismissed.includes(r.id + r.to));
+  if (open.length === 0) return null;
+  const short = (key: string) => key.split('#').at(-1) ?? key;
+  return (
+    <div className="dd-banner" style={{ top: 'auto', bottom: 14, borderColor: 'var(--line-strong)', flexDirection: 'column', alignItems: 'stretch' }} data-testid="renames">
+      {open.map((r) => (
+        <div key={r.id + r.to} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="t">
+            <b className="mono">{short(r.from)}</b> looks renamed to <b className="mono">{short(r.to)}</b>. Keep its position, notes and history?
+          </span>
+          <button type="button" className="dd-btn is-primary" data-testid="rename-confirm" onClick={() => void useDeck.getState().source?.confirmRename(r.id)}>
+            It is the same
+          </button>
+          <button type="button" className="dd-btn is-ghost" onClick={() => setDismissed([...dismissed, r.id + r.to])}>
+            It is new
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Toasts() {
   const toasts = useDeck((s) => s.toasts);
   return (
@@ -92,6 +117,7 @@ export function App() {
           )}
           <Outline />
           <ReviewBanner />
+          <Renames />
           <ChangeTray />
         </div>
         <DetailPanel />

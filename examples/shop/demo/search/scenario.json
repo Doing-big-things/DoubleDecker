@@ -1,0 +1,11 @@
+{
+  "match": "search",
+  "plan": {
+    "interpretation": "Catalog gains a search over product names. It matches part of a name and ignores letter case, and it leaves discontinued products out.",
+    "requirements": [{ "id": "req_search", "text": "Searching finds products whose name contains the text, ignoring case", "test": "finds products by part of the name" }],
+    "files": ["src/catalog/index.ts", "src/catalog/index.test.ts"],
+    "checks": ["typecheck", "tests"],
+    "questions": []
+  },
+  "candidates": ["c1"]
+}

@@ -1,0 +1,10 @@
+{
+  "adapter": "typescript",
+  "editor": "code --goto {path}:{line}",
+  "image": "node:24-slim",
+  "checks": [
+    { "name": "typecheck", "command": "npx tsc --noEmit", "kind": "command" },
+    { "name": "tests", "command": "npx vitest run", "kind": "vitest" }
+  ],
+  "worker": { "type": "scripted", "dir": "demo" }
+}

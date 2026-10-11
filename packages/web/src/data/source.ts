@@ -18,6 +18,7 @@ export interface DeckSource {
   transition(id: Id, action: Transition, body?: unknown): Promise<Change>;
   review(id: Id): Promise<ReviewBundle>;
   runChecks(): Promise<void>;
+  confirmRename(id: Id): Promise<void>;
   subscribe(handler: (event: ServerEvent) => void): () => void;
 }
 
@@ -110,6 +111,8 @@ class FixtureSource implements DeckSource {
     throw new Error('Checks need a connected repository.');
   }
 
+  async confirmRename(): Promise<void> {}
+
   subscribe(): () => void {
     return () => {};
   }
@@ -198,6 +201,10 @@ class ServerSource implements DeckSource {
 
   async runChecks(): Promise<void> {
     await this.api('/api/checks', { method: 'POST', body: '{}' });
+  }
+
+  async confirmRename(id: Id): Promise<void> {
+    await this.api('/api/identity/confirm', { method: 'POST', body: JSON.stringify({ id }) });
   }
 
   subscribe(handler: (event: ServerEvent) => void): () => void {

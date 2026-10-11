@@ -1,0 +1,12 @@
+[
+  {
+    "file": "src/catalog/index.ts",
+    "find": "  /** Stop selling a product without deleting it. */",
+    "replace": "  /** Search products by name. */\n  search(text: string): Product[] {\n    const wanted = text.trim().toLowerCase();\n    return this.list().filter((p) => p.name.toLowerCase().includes(wanted));\n  }\n\n  /** Stop selling a product without deleting it. */"
+  },
+  {
+    "file": "src/catalog/index.test.ts",
+    "find": "  it('rejects an invalid draft'",
+    "replace": "  it('finds products by part of the name', () => {\n    expect(catalog.search('SHIRT').map((p) => p.sku)).toEqual(['tee']);\n  });\n\n  it('rejects an invalid draft'"
+  }
+]

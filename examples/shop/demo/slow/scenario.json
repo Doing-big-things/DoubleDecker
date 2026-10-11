@@ -1,0 +1,11 @@
+{
+  "match": "slowly",
+  "plan": {
+    "interpretation": "Identifiers gain a helper that says which prefix an identifier carries. This stored candidate takes its time, to exercise stopping the server mid-run.",
+    "requirements": [],
+    "files": ["src/shared/ids.ts"],
+    "checks": ["typecheck", "tests"],
+    "questions": []
+  },
+  "candidates": ["c1"]
+}

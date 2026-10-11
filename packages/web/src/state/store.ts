@@ -266,8 +266,15 @@ export const useDeck = create<DeckState>()((set, get) => {
           if (!cur || FINDING_RANK[kind] < FINDING_RANK[cur]) findings.set(id, kind);
           changedIds!.add(id);
         };
+        // A finding about an operation also marks the block that owns it, so it is visible on a closed card.
+        const nodes = new Map(s.review.snapshot.nodes.map((n) => [n.id, n]));
         for (const f of s.review.findings) {
-          for (const id of f.targetIds) put(id, f.kind);
+          for (const id of f.targetIds) {
+            put(id, f.kind);
+            const node = nodes.get(id);
+            if (node?.kind === 'operation' && node.parentId && f.kind !== 'supported' && f.kind !== 'untested') put(node.parentId, f.kind);
+            else if (node?.kind === 'operation' && node.parentId) changedIds!.add(node.parentId);
+          }
           if (f.kind === 'missing' && f.opId) put(f.opId, 'missing');
         }
       }

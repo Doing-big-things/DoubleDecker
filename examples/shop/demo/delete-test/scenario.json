@@ -1,0 +1,11 @@
+{
+  "match": "negative",
+  "plan": {
+    "interpretation": "Adjusting stock by hand will no longer refuse to go below zero, so a count can be corrected before a delivery is booked.",
+    "requirements": [{ "id": "req_negative", "text": "Stock may go below zero when it is adjusted by hand", "test": "allows a negative balance" }],
+    "files": ["src/inventory/index.ts", "src/inventory/index.test.ts"],
+    "checks": ["typecheck", "tests"],
+    "questions": []
+  },
+  "candidates": ["c1"]
+}

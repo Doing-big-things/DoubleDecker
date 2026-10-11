@@ -1,0 +1,16 @@
+[
+  {
+    "file": "src/inventory/index.ts",
+    "find": "  /** Adjust stock by hand, never below zero. */",
+    "replace": "  /** Say whether a product is running low. */\n  isLow(sku: Sku): boolean {\n    return this.available(sku) < 3;\n  }\n\n  /** Adjust stock by hand, never below zero. */"
+  },
+  {
+    "file": "src/inventory/index.test.ts",
+    "find": "  it('never lets stock go below zero'",
+    "replace": "  it('flags low stock', () => {\n    inventory.adjust('mug', -3);\n    expect(inventory.isLow('mug')).toBe(true);\n  });\n\n  it('never lets stock go below zero'"
+  },
+  {
+    "file": "src/catalog/products.ts",
+    "append": "\n/** Make a URL slug from a product name. */\nexport function slugOf(name: string): string {\n  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');\n}\n"
+  }
+]

@@ -130,6 +130,8 @@ export interface DeckNotes {
   bullets: Record<Id, Bullet[]>;
   /** Summarized bullets the engineer dismissed. */
   dismissed: Id[];
+  /** What an accepted arrow was asked to be: its kind and label, by edge id. */
+  edges?: Record<Id, { kind: EdgeKind; label?: string }>;
 }
 
 // ---- Changes (spec §3.8, §6) ----
@@ -226,6 +228,8 @@ export interface Change {
   error?: string;
   /** Set when this change exists to undo an accepted one. */
   reverts?: Id;
+  /** Set on acceptance: the commits the change moved the working branch between. */
+  merged?: { base: string; head: string };
 }
 
 export type FindingKind = 'implemented' | 'missing' | 'contradicted' | 'unrequested' | 'supported' | 'untested';
@@ -293,6 +297,8 @@ export interface DeckBundle {
   changedSinceBaseline: Id[];
   /** Hash of the working tree, for deciding whether a test run is still current. */
   treeHash: string;
+  /** Entities that look renamed. The engineer confirms each one on the map (spec §4.2). */
+  renames?: { id: Id; from: string; to: string }[];
   /** Fixture mode only: source text by path, for the code peek. */
   sources?: Record<string, string>;
 }
