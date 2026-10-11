@@ -225,6 +225,8 @@ export interface Change {
   events: ChangeEvent[];
   createdAt: string;
   updatedAt: string;
+  /** Counts every update, so a late reply can never overwrite newer state. */
+  rev?: number;
   error?: string;
   /** Set when this change exists to undo an accepted one. */
   reverts?: Id;

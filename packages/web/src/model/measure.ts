@@ -154,7 +154,7 @@ export function opOffsets(index: DeckIndex, id: Id, showInternals: boolean): Map
   const block = index.byId.get(id);
   const p = expandedPlan(index, id, showInternals);
   const out = new Map<Id, number>();
-  let y = 13 + TITLE + (block?.summary ? SUMMARY : 0) + (p.notes.length ? GAP + p.notes.length * ROW : 0);
+  let y = 12 + TITLE + (block?.summary ? SUMMARY : 0) + (p.notes.length ? GAP + p.notes.length * ROW : 0);
   if (p.ops.length) y += SECTION;
   for (const op of p.ops) {
     out.set(op.id, y + OP / 2);

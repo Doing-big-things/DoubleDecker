@@ -112,7 +112,7 @@ export class Coordinator {
   }
 
   private update(change: Change, patch: Partial<Change>, event?: string, detail?: string): Change {
-    Object.assign(change, patch, { updatedAt: now() });
+    Object.assign(change, patch, { updatedAt: now(), rev: (change.rev ?? 0) + 1 });
     if (patch.state && patch.state !== 'failed') change.error = undefined;
     if (event) change.events.push({ at: now(), type: event, detail });
     this.changes.set(change.id, change);
@@ -263,7 +263,13 @@ export class Coordinator {
     void this.sandboxes.get(candidate.worktree)?.stop();
     this.sandboxes.delete(candidate.worktree);
     if (existsSync(candidate.worktree)) {
-      if (tryGit(gitRoot, ['worktree', 'remove', '--force', candidate.worktree]) === null) rmSync(candidate.worktree, { recursive: true, force: true });
+      if (tryGit(gitRoot, ['worktree', 'remove', '--force', candidate.worktree]) === null) {
+        try {
+          rmSync(candidate.worktree, { recursive: true, force: true });
+        } catch {
+          // A process from an interrupted run may still hold the folder. It is in the cache and is cleared next time.
+        }
+      }
     }
     tryGit(gitRoot, ['worktree', 'prune']);
   }
@@ -282,7 +288,11 @@ export class Coordinator {
     this.update(change, {}, 'candidate', `candidate ${n}`);
     try {
       // 1. A worktree on its own branch. A revision builds on the candidate it revises.
-      rmSync(candidate.worktree, { recursive: true, force: true });
+      try {
+        rmSync(candidate.worktree, { recursive: true, force: true });
+      } catch {
+        // handled by git below, which refuses a folder it cannot use
+      }
       tryGit(gitRoot, ['worktree', 'prune']);
       tryGit(gitRoot, ['branch', '-D', candidate.branch]);
       git(gitRoot, ['worktree', 'add', '-b', candidate.branch, candidate.worktree, previous?.commit ?? base]);
@@ -450,7 +460,11 @@ export class Coordinator {
     this.host.dir.writeIds(stored.ids);
     this.host.dir.writeNotes(notes);
     if (layout) this.host.dir.writeLayout(layout);
-    this.update(change, { state: 'accepted', merged: { base: candidate.baseCommit, head: candidate.commit! } }, 'accepted', `candidate ${candidate.n}`);
+    // Record the acceptance and commit it with the rest of .deck before anyone is told,
+    // so "Accepted" always means the working branch is complete.
+    Object.assign(change, { state: 'accepted', merged: { base: candidate.baseCommit, head: candidate.commit! }, error: undefined, updatedAt: now(), rev: (change.rev ?? 0) + 1 });
+    change.events.push({ at: now(), type: 'accepted', detail: `candidate ${candidate.n}` });
+    this.host.dir.writeChange(change);
     git(this.host.root, ['add', '--', '.deck']);
     if (git(this.host.root, ['diff', '--cached', '--name-only']).trim()) git(this.host.root, [...IDENTITY, 'commit', '--quiet', '--no-verify', '-m', `deck: accept ${change.title}`]);
     // The harness already ran the checks against exactly this code.

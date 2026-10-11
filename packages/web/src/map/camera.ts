@@ -77,6 +77,10 @@ export const camera = {
   get ready(): boolean {
     return rf !== null;
   },
+  /** The underlying React Flow instance, for tests and debugging. */
+  instance(): ReactFlowInstance | null {
+    return rf;
+  },
   viewport(): Viewport {
     return rf?.getViewport() ?? { x: 0, y: 0, zoom: 1 };
   },

@@ -297,6 +297,7 @@ export const BlockNode = memo(function BlockNode({ id, height }: NodeProps) {
     const lines = Math.max(1, Math.floor(((height ?? 100) - 22) / (fs * 1.16)));
     return (
       <div className={`${cls} is-arch`} data-coverage={block.coverage} data-testid="block" data-id={id} data-name={block.name} aria-label={aria}>
+        <div className="dd-block-clip">
         <div className="dd-arch-name dd-lod" style={{ WebkitLineClamp: lines }}>
           {block.name.split(/(?<=[a-z0-9])(?=[A-Z])|(?<=[_./-])/).map((part, i) => (
             <span key={i}>
@@ -314,6 +315,7 @@ export const BlockNode = memo(function BlockNode({ id, height }: NodeProps) {
             ✕
           </div>
         ) : null}
+        </div>
         <Ports />
       </div>
     );
@@ -328,6 +330,7 @@ export const BlockNode = memo(function BlockNode({ id, height }: NodeProps) {
 
   return (
     <div className={cls} data-coverage={block.coverage} data-testid="block" data-id={id} data-name={block.name} data-state={state ?? ''} aria-label={aria}>
+      <div className="dd-block-clip">
       <div className="dd-lod">
         <div className="dd-block-title">
           {baseline ? <span className="dd-baseline" title="Changed since the accepted baseline" /> : null}
@@ -443,6 +446,7 @@ export const BlockNode = memo(function BlockNode({ id, height }: NodeProps) {
         {rows.length ? <Drawer rows={rows} run={run} blockId={id} /> : null}
       </div>
       {clipped ? <div className="dd-fade-bottom" /> : null}
+      </div>
       <Ports />
     </div>
   );

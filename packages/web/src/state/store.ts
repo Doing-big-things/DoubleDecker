@@ -309,6 +309,9 @@ export const useDeck = create<DeckState>()((set, get) => {
   };
 
   const upsertChange = (change: Change) => {
+    // Replies and pushed events race. Never let an older copy replace a newer one.
+    const have = get().changes.find((c) => c.id === change.id);
+    if (have?.rev !== undefined && change.rev !== undefined && change.rev < have.rev) return;
     set((s) => ({ changes: s.changes.some((c) => c.id === change.id) ? s.changes.map((c) => (c.id === change.id ? change : c)) : [...s.changes, change] }));
   };
 
