@@ -40,8 +40,28 @@ export function readSecrets(root: string, check: CheckSpec): Record<string, stri
 }
 
 /**
+ * Replaces every secret a check was given, and the host of any that is a URL, with its name.
+ * What a check prints is kept and shown, and a secret must not travel with it (spec §9.3).
+ */
+export function redactor(secrets: Record<string, string> | null): (text: string) => string {
+  const hide: [string, string][] = [];
+  for (const [name, value] of Object.entries(secrets ?? {})) {
+    if (value.length >= 6) hide.push([value, `‹${name}›`]);
+    try {
+      const host = new URL(value).host;
+      if (host) hide.push([host, `‹host of ${name}›`]);
+    } catch {
+      // not a URL
+    }
+  }
+  hide.sort((a, b) => b[0].length - a[0].length);
+  return (text) => hide.reduce((t, [value, label]) => t.split(value).join(label), text);
+}
+
+/**
  * Run each check with `exec`, which decides where it runs (a fresh container, or the host
- * when the engineer opted in) or returns a reason to skip it.
+ * when the engineer opted in) or returns a reason to skip it. `secretsRoot` is where the
+ * checks' secrets are read from, so they can be kept out of everything that is stored.
  */
 export async function runChecks(
   cwd: string,
@@ -49,10 +69,12 @@ export async function runChecks(
   tests: readonly DeckTest[],
   exec: (check: CheckSpec, command: string) => Promise<RunResult | { skipped: string }>,
   progress?: (text: string) => void,
+  secretsRoot?: string,
 ): Promise<HarnessRun> {
   const out: HarnessRun = { checks: [], results: {}, failures: {} };
   for (const check of checks) {
     const vitest = check.kind === 'vitest';
+    const redact = redactor(secretsRoot ? readSecrets(secretsRoot, check) : null);
     const file = path.join(cwd, RESULTS);
     if (vitest) {
       mkdirSync(path.dirname(file), { recursive: true });
@@ -73,6 +95,11 @@ export async function runChecks(
         output: '',
         skipped: result.skipped,
       });
+      // A check that could not run leaves its tests skipped: never passed, never failed.
+      if (check.tests) {
+        const owns = new RegExp(check.tests);
+        for (const t of tests) if (owns.test(t.source.path)) out.results[t.id] = 'skipped';
+      }
       continue;
     }
     out.checks.push({
@@ -80,11 +107,13 @@ export async function runChecks(
       command: check.command,
       exitCode: result.exitCode,
       durationMs: Date.now() - started,
-      output: result.output.slice(-20_000),
+      output: redact(result.output.slice(-20_000)),
     });
     if (!vitest || !existsSync(file)) continue;
     try {
       const report = JSON.parse(readFileSync(file, 'utf8')) as VitestReport;
+      // The report can quote whatever a test saw. Nothing reads it after this.
+      rmSync(file, { force: true });
       const byKey = new Map<string, DeckTest>();
       for (const t of tests) byKey.set(`${t.source.path}#${[...t.suite, t.name].join('/')}`, t);
       for (const suite of report.testResults ?? []) {
@@ -101,7 +130,7 @@ export async function runChecks(
           out.results[test.id] = status;
           // The first line says what failed. The rest is a stack trace full of machine paths.
           if (status === 'failed')
-            out.failures[test.id] = (a.failureMessages?.[0] ?? '')
+            out.failures[test.id] = redact(a.failureMessages?.[0] ?? '')
               .split('\n')[0]!
               .replace(/\s*\/\/.*$/, '')
               .slice(0, 200);

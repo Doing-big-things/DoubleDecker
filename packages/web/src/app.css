@@ -777,6 +777,10 @@ button {
   color: var(--faint);
   font-weight: 450;
 }
+/* Every test was skipped: nothing passed and nothing failed. */
+.dd-chip[data-s="skipped"] {
+  color: var(--muted);
+}
 .dd-chip-flag {
   font-size: 1em;
   color: var(--requested);

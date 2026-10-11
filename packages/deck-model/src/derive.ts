@@ -381,7 +381,7 @@ export interface TestStats {
   failed: number;
   skipped: number;
   notRun: number;
-  state: 'none' | 'notrun' | 'pass' | 'partial' | 'fail';
+  state: 'none' | 'notrun' | 'pass' | 'partial' | 'skipped' | 'fail';
 }
 
 /** Status comes only from a run at the current tree. Anything older counts as not run. */
@@ -404,13 +404,15 @@ export function testStats(tests: readonly DeckTest[], run: TestRun | null): Test
         ? 'fail'
         : passed === total
           ? 'pass'
-          : passed > 0 || skipped > 0
+          : passed > 0
             ? 'partial'
-            : 'notrun';
+            : skipped > 0
+              ? 'skipped'
+              : 'notrun';
   return { total, passed, failed, skipped, notRun, state };
 }
 
-/** "✓12", "✕2/12", "12", "0". Skipped tests never count as passed. */
+/** "✓12", "✕2/12", "–3", "12", "0". Skipped tests never count as passed. */
 export function chipLabel(s: TestStats): string {
   switch (s.state) {
     case 'none':
@@ -421,6 +423,8 @@ export function chipLabel(s: TestStats): string {
       return `✓${s.total}`;
     case 'partial':
       return `✓${s.passed}/${s.total}`;
+    case 'skipped':
+      return `–${s.total}`;
     default:
       return `${s.total}`;
   }

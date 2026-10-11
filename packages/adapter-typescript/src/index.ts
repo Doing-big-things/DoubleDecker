@@ -897,6 +897,26 @@ export class TypeScriptAdapter {
       }
     }
 
+    // A service reached without a package, by a plain fetch, leaves no import to see. The
+    // code can say so itself: a doc comment with `@service Supabase` puts it on the map.
+    for (const block of blocks) {
+      for (const f of block.files) {
+        for (const st of f.sf.statements) {
+          for (const tag of ts.getJSDocTags(st)) {
+            if (tag.tagName.text !== 'service') continue;
+            const name = ts.getTextOfJSDocComment(tag.comment)?.trim().split(/\s+/)[0];
+            if (!name) continue;
+            let extId = externals.get(name);
+            if (!extId) {
+              extId = hashId('external', name);
+              externals.set(name, extId);
+            }
+            addEdge(blockId.get(block)!, extId, 'dependency', ref(f, st));
+          }
+        }
+      }
+    }
+
     // ---- 7. Emit blocks, operations and data.
     const parentOf = (block: BlockDraft): Id => {
       const dir = block.dir === '.' ? '' : block.dir;

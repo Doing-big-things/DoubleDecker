@@ -16,6 +16,8 @@ export interface Deck {
   origin: string;
   proc: ChildProcess;
   args: string[];
+  /** Everything decker has printed so far. */
+  log(): string;
   stop(): Promise<void>;
   restart(): Promise<void>;
   api<T>(route: string, init?: RequestInit): Promise<T>;
@@ -25,7 +27,11 @@ export interface Deck {
   open(page: Page): Promise<void>;
 }
 
-function launch(root: string, args: string[]): Promise<{ proc: ChildProcess; url: string }> {
+function launch(
+  root: string,
+  args: string[],
+  sink: { text: string },
+): Promise<{ proc: ChildProcess; url: string }> {
   return new Promise((resolve, reject) => {
     const proc = spawn(
       process.execPath,
@@ -36,6 +42,7 @@ function launch(root: string, args: string[]): Promise<{ proc: ChildProcess; url
     const timer = setTimeout(() => reject(new Error(`decker did not start:\n${out}`)), 60_000);
     const onData = (chunk: Buffer) => {
       out += chunk.toString();
+      sink.text += chunk.toString();
       const m = out.match(/decker: (http:\/\/127\.0\.0\.1:\d+\/\?t=\S+)/);
       if (m) {
         clearTimeout(timer);
@@ -54,7 +61,13 @@ function launch(root: string, args: string[]): Promise<{ proc: ChildProcess; url
 /** Copy examples/shop into a fresh git repository and start decker on it. */
 export async function startDecker(
   name: string,
-  options: { args?: string[]; setup?: (root: string) => void; source?: string } = {},
+  options: {
+    args?: string[];
+    setup?: (root: string) => void;
+    source?: string;
+    /** Keep the integration tier, which reaches the test database (spec §9.3). */
+    integration?: boolean;
+  } = {},
 ): Promise<Deck> {
   const root = path.join(TMP, `${name}-${Date.now().toString(36)}`);
   mkdirSync(TMP, { recursive: true });
@@ -65,6 +78,13 @@ export async function startDecker(
       !/[\\/]\.deck[\\/](ids|layout|notes)\.json$/.test(src) &&
       !/[\\/]\.deck[\\/]changes$/.test(src),
   });
+  // The integration tier needs credentials and the network. Only the tests about it keep it.
+  const settingsFile = path.join(root, '.deck', 'deck.json');
+  if (!options.integration && existsSync(settingsFile)) {
+    const settings = JSON.parse(readFileSync(settingsFile, 'utf8'));
+    settings.checks = settings.checks.filter((c: { secrets?: string[] }) => !c.secrets?.length);
+    writeFileSync(settingsFile, `${JSON.stringify(settings, null, 2)}\n`);
+  }
   options.setup?.(root);
   const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
   git('init', '--quiet', '-b', 'main');
@@ -76,8 +96,10 @@ export async function startDecker(
 
   const args = options.args ?? ['--sandbox', 'host', '--worker', 'scripted'];
   const deck = { root, args, token: 'e2e', git } as Deck;
+  const sink = { text: '' };
+  deck.log = () => sink.text;
   const boot = async () => {
-    const started = await launch(root, deck.args);
+    const started = await launch(root, deck.args, sink);
     deck.proc = started.proc;
     deck.url = started.url;
     deck.origin = new URL(started.url).origin;

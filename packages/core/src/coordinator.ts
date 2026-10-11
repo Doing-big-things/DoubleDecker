@@ -460,6 +460,7 @@ export class Coordinator {
       extracted.snapshot.tests,
       (check, command) => this.exec(check, command, candidate.worktree),
       (text) => this.progress(change, text),
+      this.host.root,
     );
     candidate.checks = run.checks.map((c) => ({ ...c, output: c.output.slice(-4000) }));
     const stored: StoredCandidate = {
@@ -516,6 +517,8 @@ export class Coordinator {
       this.host.settings().checks,
       snapshot.tests,
       (check, command) => this.exec(check, command, null),
+      undefined,
+      this.host.root,
     );
     const result: TestRun = {
       commit: snapshot.sourceCommit,

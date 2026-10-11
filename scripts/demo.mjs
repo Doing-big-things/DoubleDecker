@@ -5,14 +5,16 @@
 //
 //   npm run demo                                   stored candidates, no model
 //   npm run demo -- --worker claude --model claude-haiku-5-5 --effort medium
+//   npm run demo -- --integration                  also run the tier that reaches the test database
 import { execFileSync, spawn } from 'node:child_process';
-import { cpSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.join(repo, '.demo', 'shop');
-const extra = process.argv.slice(2);
+const integration = process.argv.includes('--integration');
+const extra = process.argv.slice(2).filter((a) => a !== '--integration');
 // With a real model as the worker, the stored candidates would be an answer key. Leave them out.
 const live = extra.includes('--worker') && extra[extra.indexOf('--worker') + 1] !== 'scripted';
 
@@ -26,6 +28,14 @@ cpSync(path.join(repo, 'examples', 'shop'), root, {
     !/[\\/]\.deck[\\/](ids|layout|notes)\.json$/.test(src) &&
     !/[\\/]\.deck[\\/]changes$/.test(src),
 });
+// The integration tier needs credentials and the network (spec §9.3). The demo leaves it out
+// unless asked.
+if (!integration) {
+  const file = path.join(root, '.deck', 'deck.json');
+  const settings = JSON.parse(readFileSync(file, 'utf8'));
+  settings.checks = settings.checks.filter((c) => !c.secrets?.length);
+  writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`);
+}
 const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'ignore' });
 git('init', '--quiet', '-b', 'main');
 git('config', 'user.name', 'Double Decker demo');

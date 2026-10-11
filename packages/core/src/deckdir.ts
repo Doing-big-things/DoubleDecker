@@ -11,8 +11,13 @@ export interface CheckSpec {
   command: string;
   /** How results are read. 'vitest' attaches pass and fail to the tests on the map. */
   kind?: 'vitest' | 'command';
-  /** Hosts this check may reach. Empty or absent means no network (spec §6.3, §9.3). */
+  /**
+   * Hosts this check may reach. Empty or absent means no network (spec §6.3, §9.3). An entry
+   * of the form $NAME stands for the host of that secret's URL, so the host is never written down.
+   */
   network?: string[];
+  /** Which test files this check runs, as a pattern. Lets a skipped check mark its tests skipped. */
+  tests?: string;
   /** Names of environment variables the harness passes in, read from a git-ignored env file. */
   secrets?: string[];
   /** File the secrets are read from, relative to the deck root. */

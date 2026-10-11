@@ -37,7 +37,7 @@ test('the real map: areas, blocks, coverage, the opaque construct, and one click
   for (const name of ['Catalog', 'HTTP', 'Inventory', 'Orders', 'Payments', 'Shared']) {
     await expect(page.locator(`[data-testid="area"][data-name="${name}"]`)).toHaveCount(1);
   }
-  await expect(page.getByTestId('block')).toHaveCount(22);
+  await expect(page.getByTestId('block')).toHaveCount(23);
   // Coverage is in the top bar. One call cannot be followed, so it is not 100%.
   await expect(page.getByTestId('coverage')).toHaveText('99% resolved');
 

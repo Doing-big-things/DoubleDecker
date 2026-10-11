@@ -2,9 +2,19 @@
   "adapter": "typescript",
   "editor": "code --goto {path}:{line}",
   "image": "node:24-slim",
+  "testPatterns": ["\\.(test|itest)\\.ts$"],
   "checks": [
     { "name": "typecheck", "command": "npx tsc --noEmit", "kind": "command" },
-    { "name": "tests", "command": "npx vitest run", "kind": "vitest" }
+    { "name": "tests", "command": "npx vitest run", "kind": "vitest" },
+    {
+      "name": "integration",
+      "command": "npx vitest run --config vitest.integration.config.ts",
+      "kind": "vitest",
+      "tests": "\\.itest\\.ts$",
+      "secrets": ["SUPABASE_TEST_URL", "SUPABASE_TEST_KEY"],
+      "envFile": "../../TestDB.env",
+      "network": ["$SUPABASE_TEST_URL"]
+    }
   ],
   "worker": { "type": "scripted", "dir": "demo" }
 }
