@@ -1,5 +1,5 @@
 {
-  "note": "Public repositories used to prove the map on code nobody wrote for this project (spec §9.2). Each is pinned to the commit that was measured. Clone at that commit and run `decker <path>` to repeat it. Nothing was installed and no repository code was executed.",
+  "note": "Public repositories used to prove the map on code nobody wrote for this project (spec §9.2, §10). Each is pinned to the commit that was measured. Clone at that commit and run `node scripts/measure-repo.mjs <path>` to repeat it. Nothing was installed and no repository code was executed.",
   "measured": "2026-10-11",
   "machine": "Intel Core i7-13700K, 16 cores / 24 threads, 32 GB RAM, Windows 11, Node 24.18",
   "repos": [
@@ -10,18 +10,19 @@
       "commit": "552ea024250093a48071b3ded9710de4c6e05f14",
       "dependenciesInstalled": false,
       "result": {
-        "firstMapMs": 3331,
-        "extractionMs": 2004,
+        "firstMapMs": 3379,
+        "extractionMs": 2112,
         "files": 323,
         "lines": 82845,
-        "areas": 25,
-        "blocks": 141,
-        "operations": 580,
+        "areas": 20,
+        "blocks": 133,
+        "operations": 583,
         "tests": 2933,
         "testsAttributedByDirectCall": 2382,
         "gaps": 55,
         "resolvedPercent": 98.42
-      }
+      },
+      "secondRunMs": 3337
     },
     {
       "name": "storage",
@@ -30,18 +31,56 @@
       "commit": "f31599e188d7c9c854b1daa76a11b41c6d179462",
       "dependenciesInstalled": false,
       "result": {
-        "firstMapMs": 4203,
-        "extractionMs": 2477,
+        "firstMapMs": 5276,
+        "extractionMs": 3525,
         "files": 604,
         "lines": 156355,
         "areas": 44,
         "blocks": 250,
         "operations": 2040,
         "tests": 3024,
+        "testsAttributedByDirectCall": 2051,
         "gaps": 1524,
         "resolvedPercent": 83.38,
         "comment": "Without its dependencies installed, types imported from packages are unknown, which accounts for almost every gap. The figure with dependencies installed has not been measured."
       }
     }
-  ]
+  ],
+  "budgets": [
+    {
+      "budget": "First map, 10,000-line repository: under 10 s cold, 2 s warm",
+      "what": "Hono's src/jsx folder on its own, mapped as if it were a repository",
+      "result": { "firstMapMs": 1023, "extractionMs": 622, "files": 46, "lines": 18428, "blocks": 26 }
+    },
+    {
+      "budget": "First map, 200,000-line repository: under 60 s cold",
+      "what": "Both clones in one folder, mapped as one tree. Not one real repository: two, side by side.",
+      "result": {
+        "firstMapMs": 10052,
+        "extractionMs": 8660,
+        "files": 1083,
+        "lines": 258463,
+        "areas": 93,
+        "blocks": 473,
+        "resolvedPercent": 74.99
+      }
+    },
+    {
+      "budget": "First map, examples/shop: under 3 s",
+      "what": "The reference service",
+      "result": { "firstMapMs": 743, "extractionMs": 143, "files": 32, "lines": 943, "blocks": 22 }
+    }
+  ],
+  "handCheck": {
+    "requirement": "A hand-checked sample of 30 blocks and 30 arrows on Hono matches the source (spec §11, M1).",
+    "how": "`node scripts/sample-check.mjs <deck.json> <repo> 30` draws a fixed sample and prints each block's operations and each arrow's evidence beside the source lines they point at. Every entry was read against the code.",
+    "arrows": "30 of 30 correct: each evidence line holds the call or import the arrow claims, and each target is defined where the map says.",
+    "blocks": "27 of 30 correct on the first pass. The three that were wrong showed two extractor faults and one naming fault, all fixed and confirmed on a re-drawn sample.",
+    "faultsFound": [
+      "A declaration exported by a list (`export { Hono as HonoBase }`, `export { handle, fire }`) was marked internal, and the class kept its private name.",
+      "A function behind a cast (`export const Suspense: FC = ((props) => { ... }) as any`) was not seen as an operation.",
+      "A file that only re-exports was drawn as an empty block, and blocks lifted out of single-file folders could end up with the same name in one area."
+    ],
+    "effect": "Hono went from 141 blocks in 25 areas to 133 in 20, with 3 more operations and no two blocks of one name in an area. Coverage is unchanged at 98.42%."
+  }
 }

@@ -103,6 +103,24 @@ function baseIdentifier(expr: ts.Expression): string | undefined {
 const literalText = (node: ts.Node | undefined): string | undefined =>
   node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) ? node.text : undefined;
 
+/**
+ * The function an initializer holds, looking through parentheses and casts:
+ * `const Suspense: FC = ((props) => { ... }) as any` is still a function.
+ */
+function functionOf(node: ts.Node | undefined): ts.ArrowFunction | ts.FunctionExpression | undefined {
+  let cur = node;
+  while (
+    cur &&
+    (ts.isParenthesizedExpression(cur) ||
+      ts.isAsExpression(cur) ||
+      ts.isSatisfiesExpression(cur) ||
+      ts.isTypeAssertionExpression(cur) ||
+      ts.isNonNullExpression(cur))
+  )
+    cur = cur.expression;
+  return cur && (ts.isArrowFunction(cur) || ts.isFunctionExpression(cur)) ? cur : undefined;
+}
+
 const isFunctionLike = (node: ts.Node | undefined): node is ts.ArrowFunction | ts.FunctionExpression =>
   node !== undefined && (ts.isArrowFunction(node) || ts.isFunctionExpression(node));
 
@@ -273,13 +291,39 @@ export class TypeScriptAdapter {
       return commonRoot;
     })();
 
+    // A file that declares nothing of its own: imports, re-exports, and augmentations of
+    // other modules. It is a way in to other blocks, not a block.
     const isBarrel = (sf: ts.SourceFile): boolean =>
-      sf.statements.length > 0 &&
+      sf.statements.some((s) => ts.isExportDeclaration(s)) &&
       sf.statements.every(
-        (s) => (ts.isExportDeclaration(s) && s.moduleSpecifier !== undefined) || ts.isImportDeclaration(s),
+        (s) =>
+          ts.isExportDeclaration(s) ||
+          ts.isImportDeclaration(s) ||
+          (ts.isModuleDeclaration(s) && ts.isStringLiteral(s.name)),
       );
     const exported = (node: ts.Node): boolean =>
       (ts.getCombinedModifierFlags(node as ts.Declaration) & ts.ModifierFlags.Export) !== 0;
+    // What a file exports by name after declaring it: `export { Hono as HonoBase }`.
+    const exportLists = new Map<ts.SourceFile, Map<string, string>>();
+    const exportList = (sf: ts.SourceFile): Map<string, string> => {
+      let list = exportLists.get(sf);
+      if (!list) {
+        list = new Map();
+        for (const s of sf.statements) {
+          if (
+            ts.isExportDeclaration(s) &&
+            !s.moduleSpecifier &&
+            s.exportClause &&
+            ts.isNamedExports(s.exportClause)
+          )
+            for (const e of s.exportClause.elements) list.set((e.propertyName ?? e.name).text, e.name.text);
+          else if (ts.isExportAssignment(s) && ts.isIdentifier(s.expression))
+            list.set(s.expression.text, 'default');
+        }
+        exportLists.set(sf, list);
+      }
+      return list;
+    };
 
     const byDir = new Map<string, FileInfo[]>();
     for (const f of sources) {
@@ -315,7 +359,7 @@ export class TypeScriptAdapter {
         continue;
       }
       for (const f of members) {
-        if (f === index && isBarrel(f.sf)) continue;
+        if (isBarrel(f.sf)) continue;
         if (f.sf.statements.every((s) => ts.isImportDeclaration(s))) continue;
         const base = noExt(path.posix.basename(f.rel));
         newBlock(f, base === 'index' ? pascal(dirName) : pascal(base), dir, [f]);
@@ -336,6 +380,23 @@ export class TypeScriptAdapter {
         if (/^index$/.test(noExt(path.posix.basename(block.files[0]!.rel))))
           block.name = pascal(path.posix.basename(block.dir));
         block.dir = path.posix.dirname(block.dir);
+      }
+    }
+
+    // Two blocks in one area never share a name. One that was lifted out of its own folder
+    // takes that folder's name, and an index beside a file of the same name says it is the index.
+    const named = new Map<string, BlockDraft[]>();
+    for (const block of blocks) {
+      const key = `${block.dir}|${block.name}`;
+      named.set(key, [...(named.get(key) ?? []), block]);
+    }
+    for (const group of named.values()) {
+      if (group.length < 2) continue;
+      for (const block of group) {
+        const file = block.files[0]!.rel;
+        const home = path.posix.dirname(file);
+        if (home !== block.dir) block.name = pascal(path.posix.basename(home));
+        else if (/^index$/.test(noExt(path.posix.basename(file)))) block.name = `${block.name}Index`;
       }
     }
 
@@ -397,32 +458,31 @@ export class TypeScriptAdapter {
       for (const f of block.files) {
         // In a barrel block, only what the index re-exports is public.
         const reexported = block.files.length > 1 ? this.reexports(block.files, checker) : null;
+        const listed = exportList(f.sf);
         const isPublic = (node: ts.Node, name: string) =>
-          exported(node) &&
-          (!reexported || reexported.has(name) || /^index$/.test(noExt(path.posix.basename(f.rel))));
+          (exported(node) || listed.has(name)) &&
+          (!reexported ||
+            reexported.has(listed.get(name) ?? name) ||
+            /^index$/.test(noExt(path.posix.basename(f.rel))));
 
         for (const st of f.sf.statements) {
           if (ts.isFunctionDeclaration(st) && st.name && st.body) {
             addOp(f, st.name.text, st.name.text, st, st, isPublic(st, st.name.text) ? [] : ['internal'], st);
           } else if (ts.isVariableStatement(st)) {
             for (const d of st.declarationList.declarations) {
-              if (!ts.isIdentifier(d.name) || !isFunctionLike(d.initializer)) continue;
-              addOp(
-                f,
-                d.name.text,
-                d.name.text,
-                d,
-                d.initializer,
-                isPublic(st, d.name.text) ? [] : ['internal'],
-                st,
-              );
+              const fn = functionOf(d.initializer);
+              if (!ts.isIdentifier(d.name) || !fn) continue;
+              addOp(f, d.name.text, d.name.text, d, fn, isPublic(st, d.name.text) ? [] : ['internal'], st);
             }
-            if (!st.declarationList.declarations.some((d) => isFunctionLike(d.initializer)))
+            if (!st.declarationList.declarations.some((d) => functionOf(d.initializer)))
               block.topLevel.push({ node: st, sf: f });
           } else if (ts.isClassDeclaration(st) && st.name) {
             blockOfClass.set(st, block);
             const className = st.name.text;
-            const own = className.toLowerCase() === primary;
+            // A class exported under another name is known to the rest of the code by that name.
+            const own =
+              (listed.get(className) ?? className).toLowerCase() === primary ||
+              className.toLowerCase() === primary;
             const pub = isPublic(st, className);
             for (const clause of st.heritageClauses ?? []) {
               if (clause.token !== ts.SyntaxKind.ImplementsKeyword) continue;
@@ -442,8 +502,8 @@ export class TypeScriptAdapter {
               const fn =
                 ts.isMethodDeclaration(m) && m.body
                   ? m
-                  : ts.isPropertyDeclaration(m) && isFunctionLike(m.initializer)
-                    ? m.initializer
+                  : ts.isPropertyDeclaration(m)
+                    ? functionOf(m.initializer)
                     : undefined;
               if (!fn || !m.name || !ts.isIdentifier(m.name)) continue;
               const flags = ts.getCombinedModifierFlags(m as ts.Declaration);
@@ -462,7 +522,7 @@ export class TypeScriptAdapter {
             ts.isTypeAliasDeclaration(st) ||
             ts.isEnumDeclaration(st)
           ) {
-            if (!exported(st)) continue;
+            if (!exported(st) && !listed.has(st.name.text)) continue;
             const kind = ts.isInterfaceDeclaration(st)
               ? 'interface'
               : ts.isEnumDeclaration(st)
@@ -489,13 +549,18 @@ export class TypeScriptAdapter {
       }
       if (!block.summary) {
         const f = block.files[0]!;
+        const listed = exportList(f.sf);
+        const publicName = (s: ts.Statement) => {
+          const own = (s as ts.DeclarationStatement).name?.text ?? '';
+          return listed.get(own) ?? own;
+        };
         const publics = f.sf.statements.filter(
           (s) =>
-            exported(s) &&
-            (ts.isFunctionDeclaration(s) || ts.isClassDeclaration(s) || ts.isInterfaceDeclaration(s)),
+            (ts.isFunctionDeclaration(s) || ts.isClassDeclaration(s) || ts.isInterfaceDeclaration(s)) &&
+            (exported(s) || listed.has(s.name?.text ?? '')),
         );
         const named =
-          publics.find((s) => (s as ts.DeclarationStatement).name?.text.toLowerCase() === primary) ??
+          publics.find((s) => publicName(s).toLowerCase() === primary) ??
           (publics.length === 1 ? publics[0] : undefined);
         const doc = named ? docOf(named) : undefined;
         if (named && doc) block.summary = { text: doc, node: named, sf: f };
