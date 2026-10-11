@@ -18,6 +18,10 @@ test.beforeEach(async ({ page }) => {
   await openFixture(page);
 });
 
+// Reference images live beside this file, one set per operating system, because text is
+// drawn a little differently on each. On a system with none yet, the first run writes them.
+const SHOT = { animations: 'disabled', maxDiffPixelRatio: 0.03 } as const;
+
 test('opens on the whole map and shows one level of abstraction per zoom level', async ({ page }) => {
   // Fit-all on a laptop screen lands at Architecture: every block by name, nothing else.
   await expect(canvas(page)).toHaveAttribute('data-level', 'architecture');
@@ -478,6 +482,12 @@ test('editing the deck: every gesture becomes an operation, and a request never 
   // An implemented block is solid and carries no badge.
   expect(await block(page, 'Pricing').evaluate((el) => getComputedStyle(el).borderStyle)).toBe('solid');
   await expect(block(page, 'Pricing').getByTestId('badge-requested')).toHaveCount(0);
+  // The same, as a person sees it: each compared with its stored reference image.
+  await page.mouse.move(700, 20);
+  await expect(added).toHaveScreenshot('card-requested.png', SHOT);
+  await flyTo(page, 'Ledger');
+  await page.mouse.move(700, 20);
+  await expect(block(page, 'Ledger')).toHaveScreenshot('card-accepted.png', SHOT);
 
   // 4. Drag from a block's edge to another block: add_edge, with kind, label and bullets.
   await flyTo(page, 'Discounts');
@@ -511,6 +521,11 @@ test('editing the deck: every gesture becomes an operation, and a request never 
   ).not.toBe('none');
   await expect(page.getByTestId('arrow-pill').filter({ hasText: 'Quote a discount' })).toContainText(
     'Requested',
+  );
+  await page.mouse.move(700, 20);
+  await expect(page.getByTestId('arrow-pill').filter({ hasText: 'Quote a discount' })).toHaveScreenshot(
+    'arrow-label-requested.png',
+    SHOT,
   );
   // An implemented arrow is a solid line.
   const solid = arrow(page, ids.discounts, ids.money);
