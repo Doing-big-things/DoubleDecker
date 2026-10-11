@@ -16,7 +16,7 @@
     "build": "npm run fixtures && npm run build -w @decker/web",
     "dev": "npm run dev -w @decker/web",
     "decker": "node packages/server/bin/decker.mjs",
-    "demo": "node packages/server/bin/decker.mjs examples/shop",
+    "demo": "node scripts/demo.mjs",
     "typecheck": "tsc -p tsconfig.json && tsc -p packages/web/tsconfig.json && tsc -p e2e/tsconfig.json",
     "lint": "biome check .",
     "format": "biome format --write .",

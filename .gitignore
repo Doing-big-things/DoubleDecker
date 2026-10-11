@@ -23,3 +23,6 @@ playwright-report/
 
 # Local tool configuration
 .claude/
+
+# The scratch repository `npm run demo` works in
+.demo/

@@ -26,22 +26,30 @@ npm run preview -w @decker/web
 
 Open http://localhost:4173. Add `?fixture=stress` for the 1,500-block stress map.
 
-**The whole loop**, on the reference service in `examples/shop`:
+**The whole loop**, on the reference service:
 
 ```bash
-node packages/server/bin/decker.mjs examples/shop --sandbox host
+npm run demo
 ```
 
-That maps the service and opens the browser. Then:
+That copies `examples/shop` into a scratch git repository under `.demo/`, maps it, and opens the browser. Accepting a change commits to that copy, never to this repository, and every run starts clean. Then:
 
 1. Drag from the edge of the **Orders** block to **Inventory**. Pick **API**, label it "Reserve stock", and add a few bullets.
 2. Open **Changes** and press **Submit**. Answer the plan's two questions and approve it.
 3. Review candidate 1. A harness-run test shows it reserves only part of an order, so the requirement is marked **Contradicted** and Accept is disabled.
 4. Press **Revise**. Candidate 2 passes. **Accept** merges it, and the arrow becomes part of the map.
 
-The reference service ships with stored candidates, so this demo needs no API key and always plays out the same way. To map any other TypeScript repository, run `decker <path-to-repo>`.
+The reference service ships with stored candidates, so the demo needs no API key and always plays out the same way.
 
-`--sandbox host` runs checks and agent commands directly on your machine, with no isolation. It exists because the default sandbox needs Docker or Podman. See "What is not verified" below.
+The demo uses `--sandbox host`, which runs checks and agent commands directly on your machine with no isolation. It exists because the default sandbox needs Docker or Podman. See "What is not verified" below.
+
+**Any other TypeScript repository:**
+
+```bash
+node packages/server/bin/decker.mjs <path-to-repo>
+```
+
+The map, search, code peek and editing work straight away. Sending a change to an agent then uses the Claude worker and a container sandbox, neither of which has been run yet.
 
 ## Around the map
 
