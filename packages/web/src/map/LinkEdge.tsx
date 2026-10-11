@@ -7,13 +7,20 @@ import {
   linkTests,
   testStats,
 } from '@decker/deck-model';
-import { EdgeLabelRenderer, type EdgeProps, useInternalNode } from '@xyflow/react';
-import { memo } from 'react';
+import { type EdgeProps, useInternalNode } from '@xyflow/react';
+import { createContext, memo, useContext } from 'react';
+import { createPortal } from 'react-dom';
 import { linkMark, pendingInLink } from '../model/pending';
 import { currentRun, type DeckState, useDeck, useLevel } from '../state/store';
 import { StateBadge } from './BlockNode';
-import { BANDS } from './camera';
+import { BANDS, camera } from './camera';
 import { type Rect, route } from './geometry';
+
+/**
+ * The layer arrow labels are drawn in: inside the viewport, above the lines. React Flow's own
+ * label renderer looks this element up again on every camera frame, once per label.
+ */
+export const LabelLayer = createContext<Element | null>(null);
 
 const areaLinkCache = new WeakMap<DeckIndex, Map<string, Link>>();
 
@@ -59,6 +66,7 @@ function rectOf(node: ReturnType<typeof useInternalNode>): Rect | null {
 
 export const LinkEdge = memo(function LinkEdge({ id, source, target, data }: EdgeProps) {
   const level = useLevel();
+  const labels = useContext(LabelLayer);
   const a = rectOf(useInternalNode(source));
   const b = rectOf(useInternalNode(target));
   const link = useDeck((s) => (s.index ? linkOf(s.index, id) : undefined));
@@ -100,6 +108,24 @@ export const LinkEdge = memo(function LinkEdge({ id, source, target, data }: Edg
     (level === 'blocks' && Boolean(label)) ||
     (level === 'blocks' && near && link.count > 1);
 
+  // A label never hides under a card: it slides along its run to a clear spot, and a label
+  // that only names the arrow's kind is left out when there is none.
+  let labelX = geo.labelX;
+  let pill = showPill;
+  if (showPill && level !== 'system') {
+    const hw = ((label?.length ?? 4) * 3.3 + 22) * scale;
+    const hh = 13 * scale;
+    const clear = (x: number, y: number) => !camera.coversBlock(x - hw, y - hh, x + hw, y + hh);
+    if (!clear(labelX, geo.labelY)) {
+      const run = geo.slide;
+      const spot = run
+        ? [0.5, 0.3, 0.7, 0.15, 0.85].map((f) => run.x0 + (run.x1 - run.x0) * f).find((x) => clear(x, run.y))
+        : undefined;
+      if (spot !== undefined) labelX = spot;
+      else if (!selected && !state && pending === 0) pill = false;
+    }
+  }
+
   const cls = [
     'dd-edge',
     selected ? 'is-selected' : '',
@@ -110,7 +136,14 @@ export const LinkEdge = memo(function LinkEdge({ id, source, target, data }: Edg
   return (
     <>
       <g className={cls} data-s={state} data-testid="arrow" data-id={id} data-from={source} data-to={target}>
-        <path className="dd-edge-line" d={geo.d} style={{ strokeWidth: width, strokeDasharray: dash }} />
+        {geo.parts.map((part, i) => (
+          <path
+            key={i}
+            className="dd-edge-line"
+            d={part}
+            style={{ strokeWidth: width, strokeDasharray: dash }}
+          />
+        ))}
         <path className="dd-edge-head" d={geo.head} />
         <path
           d={geo.d}
@@ -120,49 +153,50 @@ export const LinkEdge = memo(function LinkEdge({ id, source, target, data }: Edg
           className="react-flow__edge-interaction"
         />
       </g>
-      {showPill ? (
-        <EdgeLabelRenderer>
-          <button
-            type="button"
-            className={`dd-edge-pill nodrag nopan${selected ? ' is-selected' : lit || near ? ' is-lit' : ''}${state === 'removed' ? ' is-struck' : ''}${dim ? ' dd-dim' : ''}${unchanged ? ' dd-unchanged' : ''}`}
-            style={{ left: geo.labelX, top: geo.labelY }}
-            data-testid="arrow-pill"
-            onClick={(e) => {
-              e.stopPropagation();
-              useDeck.getState().select(id);
-            }}
-            onMouseEnter={() => useDeck.getState().hover(id)}
-            onMouseLeave={() => useDeck.getState().hover(null)}
-          >
-            {label ? (
-              <span>{label}</span>
-            ) : level !== 'system' && !state && link.count === 1 ? (
-              <span>call</span>
-            ) : null}
-            {link.count > 1 || level === 'system' ? (
-              <span className="dd-edge-count">
-                {level === 'system' && !label ? link.count : `×${link.count}`}
-              </span>
-            ) : null}
-            {tests && level === 'blocks' ? (
-              <span
-                className="dd-chip"
-                data-s={tests.split('|')[0]}
-                data-testid="arrow-tests"
-                title="Tests linked to this arrow's requirements"
-              >
-                {tests.split('|')[1]}
-              </span>
-            ) : null}
-            <StateBadge state={state} />
-            {pending > 0 ? (
-              <span className="dd-badge" data-s="requested">
-                +{pending} requested
-              </span>
-            ) : null}
-          </button>
-        </EdgeLabelRenderer>
-      ) : null}
+      {pill && labels
+        ? createPortal(
+            <button
+              type="button"
+              className={`dd-edge-pill nodrag nopan${selected ? ' is-selected' : lit || near ? ' is-lit' : ''}${state === 'removed' ? ' is-struck' : ''}${dim ? ' dd-dim' : ''}${unchanged ? ' dd-unchanged' : ''}`}
+              style={{ left: labelX, top: geo.labelY }}
+              data-testid="arrow-pill"
+              onClick={(e) => {
+                e.stopPropagation();
+                useDeck.getState().select(id);
+              }}
+              onMouseEnter={() => useDeck.getState().hover(id)}
+              onMouseLeave={() => useDeck.getState().hover(null)}
+            >
+              {label ? (
+                <span>{label}</span>
+              ) : level !== 'system' && !state && link.count === 1 ? (
+                <span>call</span>
+              ) : null}
+              {link.count > 1 || level === 'system' ? (
+                <span className="dd-edge-count">
+                  {level === 'system' && !label ? link.count : `×${link.count}`}
+                </span>
+              ) : null}
+              {tests && level === 'blocks' ? (
+                <span
+                  className="dd-chip"
+                  data-s={tests.split('|')[0]}
+                  data-testid="arrow-tests"
+                  title="Tests linked to this arrow's requirements"
+                >
+                  {tests.split('|')[1]}
+                </span>
+              ) : null}
+              <StateBadge state={state} />
+              {pending > 0 ? (
+                <span className="dd-badge" data-s="requested">
+                  +{pending} requested
+                </span>
+              ) : null}
+            </button>,
+            labels,
+          )
+        : null}
     </>
   );
 });

@@ -63,7 +63,10 @@ test('the demo: a requested API, a flawed candidate caught by a harness test, a 
   const requested = arrow(page, orders, inventory);
   await expect(requested).toHaveAttribute('data-s', 'requested');
   expect(
-    await requested.locator('.dd-edge-line').evaluate((el) => getComputedStyle(el).strokeDasharray),
+    await requested
+      .locator('.dd-edge-line')
+      .first()
+      .evaluate((el) => getComputedStyle(el).strokeDasharray),
   ).not.toBe('none');
   await expect(page.getByTestId('arrow-pill').filter({ hasText: 'Reserve stock' })).toContainText(
     'Requested',
@@ -113,6 +116,7 @@ test('the demo: a requested API, a flawed candidate caught by a harness test, a 
   expect(
     await arrow(page, orders, inventory)
       .locator('.dd-edge-line')
+      .first()
       .evaluate((el) => getComputedStyle(el).strokeDasharray),
   ).toBe('none');
   await expect(block(page, 'Inventory').getByTestId('badge-contradicted')).toBeVisible();

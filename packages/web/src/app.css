@@ -1069,7 +1069,7 @@ button {
 .dd-edge path.dd-edge-line {
   fill: none;
   stroke: var(--edge);
-  stroke-linecap: round;
+  stroke-linecap: butt;
   transition:
     stroke 120ms,
     opacity 160ms;
@@ -1214,15 +1214,33 @@ button {
   background: var(--line);
   margin: 0 3px;
 }
-.react-flow__minimap {
+.dd-minimap {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
   background: var(--chrome);
   border: 1px solid var(--line);
   border-radius: 10px;
   overflow: hidden;
-  margin: 12px;
 }
-.react-flow__minimap svg {
+.dd-minimap svg {
   display: block;
+  cursor: grab;
+  touch-action: none;
+}
+.dd-minimap svg:active {
+  cursor: grabbing;
+}
+.dd-minimap-mask {
+  fill: var(--scrim);
+  pointer-events: none;
+}
+.dd-minimap-frame {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1;
+  pointer-events: none;
 }
 
 /* ---------- Detail panel ---------- */

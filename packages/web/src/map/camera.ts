@@ -1,7 +1,7 @@
 // The camera: jumps, history, and the zoom bands that drive level of detail (spec §3.4, §3.5).
 import type { Id } from '@decker/deck-model';
 import { getViewportForBounds, type ReactFlowInstance, type Viewport } from '@xyflow/react';
-import { boundsOf, type Display } from '../model/layout';
+import { type Box, boundsOf, type Display } from '../model/layout';
 
 export type Level = 'system' | 'architecture' | 'blocks';
 
@@ -55,6 +55,9 @@ const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)'
 let rf: ReactFlowInstance | null = null;
 let element: HTMLElement | null = null;
 let display: Display = new Map();
+// Blocks by grid cell, built when first asked for, so "is a card here?" does not scan the map.
+let cells: Map<string, Box[]> | null = null;
+const CELL = 512;
 const past: Entry[] = [];
 const future: Entry[] = [];
 
@@ -74,6 +77,28 @@ export const camera = {
   },
   setDisplay(d: Display): void {
     display = d;
+    cells = null;
+  },
+  /** Whether a rectangle, in flow coordinates, touches any block's card. */
+  coversBlock(x0: number, y0: number, x1: number, y1: number): boolean {
+    if (!cells) {
+      cells = new Map();
+      for (const box of display.values()) {
+        if (box.kind !== 'block') continue;
+        for (let cx = Math.floor(box.ax / CELL); cx <= Math.floor((box.ax + box.w) / CELL); cx++)
+          for (let cy = Math.floor(box.ay / CELL); cy <= Math.floor((box.ay + box.h) / CELL); cy++) {
+            const key = `${cx}:${cy}`;
+            const list = cells.get(key);
+            if (list) list.push(box);
+            else cells.set(key, [box]);
+          }
+      }
+    }
+    for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++)
+      for (let cy = Math.floor(y0 / CELL); cy <= Math.floor(y1 / CELL); cy++)
+        for (const b of cells.get(`${cx}:${cy}`) ?? [])
+          if (x0 < b.ax + b.w && b.ax < x1 && y0 < b.ay + b.h && b.ay < y1) return true;
+    return false;
   },
   get ready(): boolean {
     return rf !== null;

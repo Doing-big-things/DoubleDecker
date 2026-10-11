@@ -7,7 +7,6 @@ import {
   BackgroundVariant,
   ConnectionLineType,
   type Edge,
-  MiniMap,
   type Node,
   type NodeChange,
   type NodeHandle,
@@ -24,11 +23,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AREA, areaAt, type Box, computeDisplay, type Display } from '../model/layout';
 import { BLOCK_W, blockHeight, collapsedHeight } from '../model/measure';
 import { currentRun, useDeck, useLevel } from '../state/store';
-import { AreaNode, AreaTitles, areaStyle, ChipContext } from './AreaNode';
+import { AreaNode, AreaTitles, ChipContext } from './AreaNode';
 import { BlockNode } from './BlockNode';
 import { BANDS, bandFor, bandVars, camera, levelOf, MAX_ZOOM, MIN_ZOOM } from './camera';
 import { type Side, sideOf, slot } from './geometry';
-import { LinkEdge } from './LinkEdge';
+import { LabelLayer, LinkEdge } from './LinkEdge';
+import { MiniMap } from './MiniMap';
 
 const nodeTypes = { area: AreaNode, block: BlockNode };
 const edgeTypes = { link: LinkEdge };
@@ -100,6 +100,7 @@ function Canvas() {
   const connecting = useConnection((c) => c.inProgress);
   const wrap = useRef<HTMLDivElement>(null);
   const [panOnScroll, setPanOnScroll] = useState(false);
+  const [labelLayer, setLabelLayer] = useState<Element | null>(null);
   const [zoomPct, setZoomPct] = useState(100);
 
   const display: Display = useMemo(() => {
@@ -369,14 +370,6 @@ function Canvas() {
   }, []);
 
   const style = useMemo(() => bandVars(band) as React.CSSProperties, [band]);
-  const minimapColor = useCallback(
-    (n: Node) => {
-      if (n.type !== 'area' || !index) return 'var(--line-strong)';
-      const { hue, depth } = areaStyle(index, n.id);
-      return `hsl(${hue} 40% 55% / ${depth ? 0.12 : 0.22})`;
-    },
-    [index],
-  );
 
   return (
     <div
@@ -389,107 +382,103 @@ function Canvas() {
       style={{ width: '100%', height: '100%' }}
     >
       <ChipContext.Provider value={chips}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          style={style}
-          onInit={(instance) => camera.attach(instance, wrap.current)}
-          onNodesChange={onNodesChange}
-          onMove={onMove}
-          minZoom={MIN_ZOOM}
-          maxZoom={MAX_ZOOM}
-          onlyRenderVisibleElements
-          panOnDrag={[0, 1]}
-          panOnScroll={panOnScroll}
-          zoomOnDoubleClick={false}
-          nodeDragThreshold={3}
-          snapToGrid
-          snapGrid={[8, 8]}
-          nodesConnectable={level === 'blocks'}
-          elementsSelectable={false}
-          nodesFocusable={false}
-          edgesFocusable={false}
-          disableKeyboardA11y
-          deleteKeyCode={null}
-          selectionKeyCode={null}
-          multiSelectionKeyCode={null}
-          connectionLineType={ConnectionLineType.SmoothStep}
-          connectionRadius={24}
-          isValidConnection={(c) => c.source !== c.target}
-          onConnectEnd={onConnectEnd}
-          proOptions={{ hideAttribution: true }}
-          onNodeClick={(_, node) => {
-            const st = useDeck.getState();
-            if (node.type === 'area' && level !== 'system') st.select(null);
-            else st.select(node.id);
-          }}
-          onNodeDoubleClick={(_, node) => {
-            if (node.type === 'block' || level === 'system')
-              useDeck.getState().select(node.id, { fly: true });
-          }}
-          onEdgeClick={(_, edge) => useDeck.getState().select(edge.id)}
-          onPaneClick={() => useDeck.getState().select(null)}
-          onNodeMouseEnter={(_, node) => {
-            if (dragging.current) return;
-            if (node.type === 'block' || level === 'system') useDeck.getState().hover(node.id);
-          }}
-          onNodeMouseLeave={() => useDeck.getState().hover(null)}
-          onEdgeMouseEnter={(_, edge) => useDeck.getState().hover(edge.id)}
-          onEdgeMouseLeave={() => useDeck.getState().hover(null)}
-          onNodeDragStart={() => {
-            dragging.current = true;
-            useDeck.getState().hover(null);
-          }}
-          onNodeDrag={(_, node) => {
-            const st = useDeck.getState();
-            const over = st.review ? null : (dropAt(node).area?.id ?? null);
-            if (over !== st.dropArea) st.set({ dropArea: over });
-          }}
-          onNodeDragStop={(_, node) => {
-            dragging.current = false;
-            const st = useDeck.getState();
-            const drop = st.review ? null : dropAt(node);
-            if (drop?.area) {
-              const snap = (v: number) => Math.round(v / 8) * 8;
-              st.moveNode(
-                node.id,
-                {
-                  x: Math.max(AREA.side, snap(drop.ax - drop.area.ax)),
-                  y: Math.max(AREA.top, snap(drop.ay - drop.area.ay)),
-                },
-                drop.area.id,
-              );
-              return;
-            }
-            const box = display.get(node.id);
-            const base = st.positions[node.id];
-            const push = box && base ? box.y - base.y : 0;
-            const inArea = Boolean(node.parentId);
-            st.moveNode(node.id, {
-              x: inArea ? Math.max(AREA.side, node.position.x) : node.position.x,
-              y: inArea ? Math.max(AREA.top, node.position.y - push) : node.position.y - push,
-            });
-          }}
-        >
-          <ViewportPortal>
-            <AreaTitles boxes={titles} />
-          </ViewportPortal>
-          <Background variant={BackgroundVariant.Dots} gap={24} size={1.4} color="var(--grid)" />
-          <MiniMap
-            pannable
-            zoomable
-            nodeColor={minimapColor}
-            nodeStrokeWidth={0}
-            nodeBorderRadius={6}
-            maskColor="var(--scrim)"
-            bgColor="var(--chrome)"
-            style={{ width: 188, height: 124 }}
-          />
-        </ReactFlow>
+        <LabelLayer.Provider value={labelLayer}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            style={style}
+            onInit={(instance) => {
+              camera.attach(instance, wrap.current);
+              setLabelLayer(wrap.current?.querySelector('.react-flow__edgelabel-renderer') ?? null);
+            }}
+            onNodesChange={onNodesChange}
+            onMove={onMove}
+            minZoom={MIN_ZOOM}
+            maxZoom={MAX_ZOOM}
+            onlyRenderVisibleElements
+            panOnDrag={[0, 1]}
+            panOnScroll={panOnScroll}
+            zoomOnDoubleClick={false}
+            nodeDragThreshold={3}
+            snapToGrid
+            snapGrid={[8, 8]}
+            nodesConnectable={level === 'blocks'}
+            elementsSelectable={false}
+            nodesFocusable={false}
+            edgesFocusable={false}
+            disableKeyboardA11y
+            deleteKeyCode={null}
+            selectionKeyCode={null}
+            multiSelectionKeyCode={null}
+            connectionLineType={ConnectionLineType.SmoothStep}
+            connectionRadius={24}
+            isValidConnection={(c) => c.source !== c.target}
+            onConnectEnd={onConnectEnd}
+            proOptions={{ hideAttribution: true }}
+            onNodeClick={(_, node) => {
+              const st = useDeck.getState();
+              if (node.type === 'area' && level !== 'system') st.select(null);
+              else st.select(node.id);
+            }}
+            onNodeDoubleClick={(_, node) => {
+              if (node.type === 'block' || level === 'system')
+                useDeck.getState().select(node.id, { fly: true });
+            }}
+            onEdgeClick={(_, edge) => useDeck.getState().select(edge.id)}
+            onPaneClick={() => useDeck.getState().select(null)}
+            onNodeMouseEnter={(_, node) => {
+              if (dragging.current) return;
+              if (node.type === 'block' || level === 'system') useDeck.getState().hover(node.id);
+            }}
+            onNodeMouseLeave={() => useDeck.getState().hover(null)}
+            onEdgeMouseEnter={(_, edge) => useDeck.getState().hover(edge.id)}
+            onEdgeMouseLeave={() => useDeck.getState().hover(null)}
+            onNodeDragStart={() => {
+              dragging.current = true;
+              useDeck.getState().hover(null);
+            }}
+            onNodeDrag={(_, node) => {
+              const st = useDeck.getState();
+              const over = st.review ? null : (dropAt(node).area?.id ?? null);
+              if (over !== st.dropArea) st.set({ dropArea: over });
+            }}
+            onNodeDragStop={(_, node) => {
+              dragging.current = false;
+              const st = useDeck.getState();
+              const drop = st.review ? null : dropAt(node);
+              if (drop?.area) {
+                const snap = (v: number) => Math.round(v / 8) * 8;
+                st.moveNode(
+                  node.id,
+                  {
+                    x: Math.max(AREA.side, snap(drop.ax - drop.area.ax)),
+                    y: Math.max(AREA.top, snap(drop.ay - drop.area.ay)),
+                  },
+                  drop.area.id,
+                );
+                return;
+              }
+              const box = display.get(node.id);
+              const base = st.positions[node.id];
+              const push = box && base ? box.y - base.y : 0;
+              const inArea = Boolean(node.parentId);
+              st.moveNode(node.id, {
+                x: inArea ? Math.max(AREA.side, node.position.x) : node.position.x,
+                y: inArea ? Math.max(AREA.top, node.position.y - push) : node.position.y - push,
+              });
+            }}
+          >
+            <ViewportPortal>
+              <AreaTitles boxes={titles} />
+            </ViewportPortal>
+            <Background variant={BackgroundVariant.Dots} gap={24} size={1.4} color="var(--grid)" />
+          </ReactFlow>
+        </LabelLayer.Provider>
       </ChipContext.Provider>
 
+      <MiniMap index={index} display={display} />
       <div className="dd-controls">
         <button
           type="button"

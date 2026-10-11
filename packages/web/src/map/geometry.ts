@@ -21,14 +21,29 @@ export function sideOf(a: Rect, b: Rect): Side {
 }
 
 export interface Route {
+  /** The whole line as one path: what the pointer hits. */
   d: string;
+  /**
+   * The same line as the pieces that are drawn: each straight run and each rounded corner on
+   * its own. A browser rasterizes one long bent line through a mask the size of its bounding
+   * box, every frame, and a map has hundreds of them. Straight runs and small arcs cost nothing.
+   */
+  parts: string[];
   head: string;
   labelX: number;
   labelY: number;
+  /** The straight run the label sits on, when it can slide along one to stay clear of cards. */
+  slide?: { x0: number; x1: number; y: number };
 }
 
-function rounded(points: [number, number][], radius: number): string {
-  if (points.length < 3) return `M${points.map((p) => `${p[0]},${p[1]}`).join('L')}`;
+function rounded(points: [number, number][], radius: number): { d: string; parts: string[] } {
+  const parts: string[] = [];
+  let from = points[0]!;
+  const run = (to: [number, number]) => {
+    if (Math.abs(to[0] - from[0]) > 0.01 || Math.abs(to[1] - from[1]) > 0.01)
+      parts.push(`M${from[0]},${from[1]}L${to[0]},${to[1]}`);
+    from = to;
+  };
   let d = `M${points[0]![0]},${points[0]![1]}`;
   for (let i = 1; i < points.length - 1; i++) {
     const [px, py] = points[i - 1]!;
@@ -39,6 +54,7 @@ function rounded(points: [number, number][], radius: number): string {
     const r = Math.min(radius, inLen / 2, outLen / 2);
     if (r < 0.5) {
       d += `L${cx},${cy}`;
+      run([cx, cy]);
       continue;
     }
     const ax = cx - ((cx - px) / inLen) * r;
@@ -46,9 +62,13 @@ function rounded(points: [number, number][], radius: number): string {
     const bx = cx + ((nx - cx) / outLen) * r;
     const by = cy + ((ny - cy) / outLen) * r;
     d += `L${ax},${ay}Q${cx},${cy} ${bx},${by}`;
+    run([ax, ay]);
+    parts.push(`M${ax},${ay}Q${cx},${cy} ${bx},${by}`);
+    from = [bx, by];
   }
   const last = points.at(-1)!;
-  return `${d}L${last[0]},${last[1]}`;
+  run(last);
+  return { d: `${d}L${last[0]},${last[1]}`, parts };
 }
 
 /**
@@ -70,9 +90,15 @@ export function route(a: Rect, b: Rect, sf: number, tf: number, scale: number, r
     const gap = Math.abs(ey - sy);
     const lane = ey - dir * Math.min(gap / 2, 18 * Math.min(scale, 2.5));
     const tip = ey - dir * hl * 0.7;
-    const d =
+    const line =
       Math.abs(ex - sx) < 1
-        ? `M${sx},${sy}L${ex},${tip}`
+        ? rounded(
+            [
+              [sx, sy],
+              [ex, tip],
+            ],
+            r,
+          )
         : rounded(
             [
               [sx, sy],
@@ -86,10 +112,10 @@ export function route(a: Rect, b: Rect, sf: number, tf: number, scale: number, r
     // Labels sit on the last horizontal run, near the block they point at, and fan out
     // along it so arrows that arrive together do not stack their labels.
     const run = Math.abs(ex - sx);
-    if (run < 1) return { d, head, labelX: ex, labelY: (sy + ey) / 2 };
+    if (run < 1) return { ...line, head, labelX: ex, labelY: (sy + ey) / 2 };
     const want = (64 + rank * 124) * scale;
     const labelX = want > run - 28 * scale ? (sx + ex) / 2 : ex - Math.sign(ex - sx) * want;
-    return { d, head, labelX, labelY: lane };
+    return { ...line, head, labelX, labelY: lane, slide: { x0: sx, x1: ex, y: lane } };
   }
 
   const dir = side === 'right' ? 1 : -1;
@@ -102,7 +128,7 @@ export function route(a: Rect, b: Rect, sf: number, tf: number, scale: number, r
   if ((ex - sx) * dir < 12) {
     // Overlapping boxes: a short hop around the outside.
     const out = Math.max(a.y + a.h, b.y + b.h) + 18 * scale;
-    const d = rounded(
+    const line = rounded(
       [
         [a.x + a.w / 2, a.y + a.h],
         [a.x + a.w / 2, out],
@@ -113,16 +139,22 @@ export function route(a: Rect, b: Rect, sf: number, tf: number, scale: number, r
     );
     const bx = b.x + b.w / 2;
     return {
-      d,
+      ...line,
       head: `M${bx - hw},${b.y + b.h + hl}L${bx + hw},${b.y + b.h + hl}L${bx},${b.y + b.h}Z`,
       labelX: (a.x + a.w / 2 + bx) / 2,
       labelY: out,
     };
   }
   const mid = (sx + ex) / 2;
-  const d =
+  const line =
     Math.abs(ey - sy) < 1
-      ? `M${sx},${sy}L${tip},${ey}`
+      ? rounded(
+          [
+            [sx, sy],
+            [tip, ey],
+          ],
+          r,
+        )
       : rounded(
           [
             [sx, sy],
@@ -132,7 +164,7 @@ export function route(a: Rect, b: Rect, sf: number, tf: number, scale: number, r
           ],
           r,
         );
-  return { d, head, labelX: mid, labelY: (sy + ey) / 2 };
+  return { ...line, head, labelX: mid, labelY: (sy + ey) / 2 };
 }
 
 /** Spread k arrows along one side: fractions centered on 0.5. */

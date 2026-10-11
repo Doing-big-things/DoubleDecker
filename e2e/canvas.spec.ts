@@ -504,16 +504,22 @@ test('editing the deck: every gesture becomes an operation, and a request never 
   const requested = arrow(page, ids.discounts, ids.pricing);
   await expect(requested).toHaveAttribute('data-s', 'requested');
   expect(
-    await requested.locator('.dd-edge-line').evaluate((el) => getComputedStyle(el).strokeDasharray),
+    await requested
+      .locator('.dd-edge-line')
+      .first()
+      .evaluate((el) => getComputedStyle(el).strokeDasharray),
   ).not.toBe('none');
   await expect(page.getByTestId('arrow-pill').filter({ hasText: 'Quote a discount' })).toContainText(
     'Requested',
   );
   // An implemented arrow is a solid line.
   const solid = arrow(page, ids.discounts, ids.money);
-  expect(await solid.locator('.dd-edge-line').evaluate((el) => getComputedStyle(el).strokeDasharray)).toBe(
-    'none',
-  );
+  expect(
+    await solid
+      .locator('.dd-edge-line')
+      .first()
+      .evaluate((el) => getComputedStyle(el).strokeDasharray),
+  ).toBe('none');
 
   // 5. F2 renames; 6. Delete requests removal.
   await flyTo(page, 'Categories');
