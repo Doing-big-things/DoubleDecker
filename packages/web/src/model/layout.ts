@@ -267,7 +267,11 @@ export function makeRoom(
 
 let elk: InstanceType<typeof ELK> | null = null;
 
-function buildElkGraph(index: DeckIndex, rest: (id: Id) => number): ElkNode {
+function buildElkGraph(
+  index: DeckIndex,
+  rest: (id: Id) => number,
+  packed: ReadonlySet<Id> = new Set(),
+): ElkNode {
   // Every arrow is laid out at the level where its two ends first share a parent.
   const chain = (id: Id): Id[] => {
     const out: Id[] = [];
@@ -299,7 +303,8 @@ function buildElkGraph(index: DeckIndex, rest: (id: Id) => number): ElkNode {
   const build = (node: DeckNode, depth: number): ElkNode => {
     if (node.kind === 'block') return { id: node.id, width: BLOCK_W, height: rest(node.id) };
     const kids = kidsOf(index, node.id);
-    const edges = [...(edgesAt.get(node.id)?.values() ?? [])];
+    // A packed area ignores its arrows and fills its space like a shelf.
+    const edges = packed.has(node.id) ? [] : [...(edgesAt.get(node.id)?.values() ?? [])];
     const isRoot = node.kind === 'system';
     const foot = AREA.bottom + (isRoot ? 0 : areaExternals(index, node.id).length ? AREA.ext : 0);
     const padding = isRoot
@@ -346,7 +351,22 @@ function buildElkGraph(index: DeckIndex, rest: (id: Id) => number): ElkNode {
 /** A full automatic layout. Runs in a worker and never blocks the canvas. */
 export async function autoLayout(index: DeckIndex, rest: (id: Id) => number): Promise<Positions> {
   elk ??= new ELK({ workerUrl: elkWorkerUrl });
-  const result = await elk.layout(buildElkGraph(index, rest));
+  let result = await elk.layout(buildElkGraph(index, rest));
+  // Layers suit an area whose blocks call each other in a chain. They suit a large area with a
+  // hub and many spokes badly: one long row or column, and most of the area empty. An area of
+  // ten or more things that layers leave less than 30% full is laid out again as a packed
+  // shelf, which keeps the map dense. Smaller areas keep their layers: there the shape reads.
+  const sparse = new Set<Id>();
+  const visit = (node: ElkNode, isRoot: boolean) => {
+    const kids = node.children ?? [];
+    for (const kid of kids) visit(kid, false);
+    if (isRoot || kids.length < 10) return;
+    const used = kids.reduce((sum, k) => sum + (k.width ?? 0) * (k.height ?? 0), 0);
+    const room = (node.width ?? 0) * (node.height ?? 0);
+    if (room > 0 && used / room < 0.3) sparse.add(node.id);
+  };
+  visit(result, true);
+  if (sparse.size) result = await elk.layout(buildElkGraph(index, rest, sparse));
   const positions: Positions = {};
   const snap = (v: number) => Math.round(v / 8) * 8;
   const read = (node: ElkNode, isRoot: boolean) => {
