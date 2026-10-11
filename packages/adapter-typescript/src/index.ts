@@ -11,19 +11,19 @@ import {
   type DeckSnapshot,
   type DeckTest,
   type EdgeKind,
+  firstSentence,
   type Gap,
   type GapReason,
-  type Id,
-  type SourceRef,
-  firstSentence,
   hashId,
   humanize,
+  type Id,
+  type SourceRef,
   snapshotSchema,
 } from '@decker/deck-model';
 import { Project, ts } from 'ts-morph';
-import { type Entity, type IdsFile, type RenameSuggestion, assignIds } from './identity.ts';
+import { assignIds, type Entity, type IdsFile, type RenameSuggestion } from './identity.ts';
 
-export { type IdsFile, type RenameSuggestion, confirmRename, emptyIds } from './identity.ts';
+export { confirmRename, emptyIds, type IdsFile, type RenameSuggestion } from './identity.ts';
 
 export const ADAPTER_VERSION = '0.1.0';
 
@@ -34,6 +34,8 @@ export interface AdapterSettings {
   testPatterns?: string[];
   /** Regular expressions for paths to leave out altogether. */
   exclude?: string[];
+  /** The system's name. Defaults to the name of the root directory. */
+  name?: string;
 }
 
 export interface ExtractInput {
@@ -52,12 +54,21 @@ export interface ExtractResult {
 }
 
 const DEFAULT_TESTS = ['\\.(test|spec)\\.[cm]?[jt]sx?$', '(^|/)__tests__/', '(^|/)__mocks__/'];
-const DEFAULT_EXCLUDE = ['(^|/)node_modules/', '(^|/)dist/', '(^|/)build/', '(^|/)coverage/', '(^|/)\\.deck/', '\\.d\\.[cm]?ts$'];
+const DEFAULT_EXCLUDE = [
+  '(^|/)node_modules/',
+  '(^|/)dist/',
+  '(^|/)build/',
+  '(^|/)coverage/',
+  '(^|/)\\.deck/',
+  '\\.d\\.[cm]?ts$',
+];
 const SOURCE = /\.[cm]?[jt]sx?$/;
 const HTTP_VERBS = new Set(['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'all']);
 const ROUTE_LITERAL = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|ALL)\s+(\/\S*)$/;
 const BUILTINS = new Set(
-  'assert buffer child_process cluster crypto dns events fs http http2 https net os path perf_hooks process querystring readline stream string_decoder timers tls tty url util v8 vm worker_threads zlib'.split(' '),
+  'assert buffer child_process cluster crypto dns events fs http http2 https net os path perf_hooks process querystring readline stream string_decoder timers tls tty url util v8 vm worker_threads zlib'.split(
+    ' ',
+  ),
 );
 
 const sha = (text: string, n = 12): string => createHash('sha1').update(text).digest('hex').slice(0, n);
@@ -77,7 +88,13 @@ function baseIdentifier(expr: ts.Expression): string | undefined {
   let e: ts.Node = expr;
   for (;;) {
     if (ts.isIdentifier(e)) return e.text;
-    if (ts.isPropertyAccessExpression(e) || ts.isCallExpression(e) || ts.isNonNullExpression(e) || ts.isParenthesizedExpression(e)) e = e.expression;
+    if (
+      ts.isPropertyAccessExpression(e) ||
+      ts.isCallExpression(e) ||
+      ts.isNonNullExpression(e) ||
+      ts.isParenthesizedExpression(e)
+    )
+      e = e.expression;
     else if (ts.isTaggedTemplateExpression(e)) e = e.tag;
     else return undefined;
   }
@@ -141,7 +158,7 @@ export class TypeScriptAdapter {
   }
 
   get configHash(): string {
-    return sha(JSON.stringify({ v: ADAPTER_VERSION, s: this.settings }), 10);
+    return sha(JSON.stringify({ v: ADAPTER_VERSION, s: { ...this.settings, name: undefined } }), 10);
   }
 
   private load(): Project {
@@ -150,7 +167,9 @@ export class TypeScriptAdapter {
     if (existsSync(configPath)) {
       const project = new Project({ tsConfigFilePath: configPath, compilerOptions: lenient });
       // Follow project references: a root config may list no files of its own.
-      const raw = ts.readConfigFile(configPath, ts.sys.readFile).config as { references?: { path: string }[] } | undefined;
+      const raw = ts.readConfigFile(configPath, ts.sys.readFile).config as
+        | { references?: { path: string }[] }
+        | undefined;
       for (const ref of raw?.references ?? []) {
         let target = path.resolve(path.dirname(configPath), ref.path);
         if (!target.endsWith('.json')) target = path.join(target, 'tsconfig.json');
@@ -159,10 +178,20 @@ export class TypeScriptAdapter {
       if (this.files(project).length > 0) return project;
     }
     const project = new Project({
-      compilerOptions: { ...lenient, target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, jsx: ts.JsxEmit.Preserve },
+      compilerOptions: {
+        ...lenient,
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.ESNext,
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
+        jsx: ts.JsxEmit.Preserve,
+      },
     });
     const base = existsSync(path.join(this.root, 'src')) ? 'src' : '.';
-    project.addSourceFilesAtPaths([`${posix(this.root)}/${base}/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`, '!**/node_modules/**', '!**/dist/**']);
+    project.addSourceFilesAtPaths([
+      `${posix(this.root)}/${base}/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`,
+      '!**/node_modules/**',
+      '!**/dist/**',
+    ]);
     return project;
   }
 
@@ -203,7 +232,7 @@ export class TypeScriptAdapter {
     const files = this.files(this.project);
     const sources = files.filter((f) => !f.isTest);
     const tests = files.filter((f) => f.isTest);
-    const systemName = path.basename(this.root);
+    const systemName = this.settings.name ?? path.basename(this.root);
 
     const ref = (f: FileInfo, node: ts.Node, symbol?: string): SourceRef => {
       const start = node.getStart(f.sf);
@@ -229,9 +258,28 @@ export class TypeScriptAdapter {
       return prefix.filter((p) => p !== '.').join('/');
     })();
 
+    // When one folder holds most of the code (src/ beside scripts and benchmarks), its
+    // contents become the top level of the map instead of sitting inside one giant area.
+    const primaryRoot = (() => {
+      const counts = new Map<string, number>();
+      for (const f of sources) {
+        const rest = commonRoot ? f.rel.slice(commonRoot.length + 1) : f.rel;
+        const seg = rest.includes('/') ? rest.split('/')[0]! : '';
+        counts.set(seg, (counts.get(seg) ?? 0) + 1);
+      }
+      for (const [seg, count] of counts)
+        if (seg && counts.size > 1 && count / sources.length >= 0.7)
+          return commonRoot ? `${commonRoot}/${seg}` : seg;
+      return commonRoot;
+    })();
+
     const isBarrel = (sf: ts.SourceFile): boolean =>
-      sf.statements.length > 0 && sf.statements.every((s) => (ts.isExportDeclaration(s) && s.moduleSpecifier !== undefined) || ts.isImportDeclaration(s));
-    const exported = (node: ts.Node): boolean => (ts.getCombinedModifierFlags(node as ts.Declaration) & ts.ModifierFlags.Export) !== 0;
+      sf.statements.length > 0 &&
+      sf.statements.every(
+        (s) => (ts.isExportDeclaration(s) && s.moduleSpecifier !== undefined) || ts.isImportDeclaration(s),
+      );
+    const exported = (node: ts.Node): boolean =>
+      (ts.getCombinedModifierFlags(node as ts.Declaration) & ts.ModifierFlags.Export) !== 0;
 
     const byDir = new Map<string, FileInfo[]>();
     for (const f of sources) {
@@ -243,7 +291,15 @@ export class TypeScriptAdapter {
     const blocks: BlockDraft[] = [];
     const blockOfFile = new Map<string, BlockDraft>();
     const newBlock = (file: FileInfo, name: string, dir: string, members: FileInfo[]): BlockDraft => {
-      const block: BlockDraft = { entity: { kind: 'block', path: noExt(file.rel), name: '' }, name, dir, files: members, ops: [], data: [], topLevel: [] };
+      const block: BlockDraft = {
+        entity: { kind: 'block', path: noExt(file.rel), name: '' },
+        name,
+        dir,
+        files: members,
+        ops: [],
+        data: [],
+        topLevel: [],
+      };
       blocks.push(block);
       for (const m of members) blockOfFile.set(m.rel, block);
       return block;
@@ -251,7 +307,8 @@ export class TypeScriptAdapter {
 
     for (const [dir, members] of byDir) {
       const index = members.find((f) => /^index\.[cm]?[jt]sx?$/.test(path.posix.basename(f.rel)));
-      const dirName = dir === '.' || dir === commonRoot ? systemName : path.posix.basename(dir);
+      const dirName =
+        dir === '.' || dir === commonRoot || dir === primaryRoot ? systemName : path.posix.basename(dir);
       if (index && isBarrel(index.sf) && !hasSubdirs(dir) && members.length > 1) {
         // A directory whose index re-exports its contents is one block; its files are internals.
         newBlock(index, pascal(dirName), path.posix.dirname(dir), members);
@@ -266,10 +323,18 @@ export class TypeScriptAdapter {
     }
 
     // A directory holding a single block is that block, placed in the parent directory.
-    const countIn = (dir: string) => blocks.filter((b) => b.dir === dir || b.dir.startsWith(`${dir}/`)).length;
+    const countIn = (dir: string) =>
+      blocks.filter((b) => b.dir === dir || b.dir.startsWith(`${dir}/`)).length;
     for (const block of blocks) {
-      while (block.dir !== '.' && block.dir !== commonRoot && block.dir.length > commonRoot.length && countIn(block.dir) === 1) {
-        if (/^index$/.test(noExt(path.posix.basename(block.files[0]!.rel)))) block.name = pascal(path.posix.basename(block.dir));
+      while (
+        block.dir !== '.' &&
+        block.dir !== commonRoot &&
+        block.dir !== primaryRoot &&
+        block.dir.length > commonRoot.length &&
+        countIn(block.dir) === 1
+      ) {
+        if (/^index$/.test(noExt(path.posix.basename(block.files[0]!.rel))))
+          block.name = pascal(path.posix.basename(block.dir));
         block.dir = path.posix.dirname(block.dir);
       }
     }
@@ -285,17 +350,36 @@ export class TypeScriptAdapter {
         return `${p.dotDotDotToken ? '...' : ''}${p.name.getText()}${p.questionToken || p.initializer ? '?' : ''}: ${type}`;
       });
       const sig = checker.getSignatureFromDeclaration(fn);
-      const ret = fn.type ? fn.type.getText() : sig ? short(checker.typeToString(checker.getReturnTypeOfSignature(sig))) : 'void';
-      const generics = fn.typeParameters?.length ? `<${fn.typeParameters.map((t) => t.name.text).join(', ')}>` : '';
+      const ret = fn.type
+        ? fn.type.getText()
+        : sig
+          ? short(checker.typeToString(checker.getReturnTypeOfSignature(sig)))
+          : 'void';
+      const generics = fn.typeParameters?.length
+        ? `<${fn.typeParameters.map((t) => t.name.text).join(', ')}>`
+        : '';
       return `${name}${generics}(${params.join(', ')}): ${ret}`.replace(/\s+/g, ' ');
     };
     const short = (text: string) => (text.length > 70 ? `${text.slice(0, 67)}…` : text);
     const shapeOf = (fn: ts.SignatureDeclaration & { body?: ts.Node }): string =>
-      sha(`${fn.parameters.map((p) => p.getText()).join(',')}|${fn.type?.getText() ?? ''}|${fn.body?.getText() ?? ''}`.replace(/\s+/g, ' '));
+      sha(
+        `${fn.parameters.map((p) => p.getText()).join(',')}|${fn.type?.getText() ?? ''}|${fn.body?.getText() ?? ''}`.replace(
+          /\s+/g,
+          ' ',
+        ),
+      );
 
     for (const block of blocks) {
       const primary = block.name.toLowerCase();
-      const addOp = (f: FileInfo, name: string, key: string, decl: ts.Node, fn: ts.SignatureDeclaration & { body?: ts.Node }, tags: string[], docNode: ts.Node) => {
+      const addOp = (
+        f: FileInfo,
+        name: string,
+        key: string,
+        decl: ts.Node,
+        fn: ts.SignatureDeclaration & { body?: ts.Node },
+        tags: string[],
+        docNode: ts.Node,
+      ) => {
         const op: OpDraft = {
           entity: { kind: 'operation', path: noExt(f.rel), name: key, shape: shapeOf(fn) },
           name,
@@ -313,7 +397,9 @@ export class TypeScriptAdapter {
       for (const f of block.files) {
         // In a barrel block, only what the index re-exports is public.
         const reexported = block.files.length > 1 ? this.reexports(block.files, checker) : null;
-        const isPublic = (node: ts.Node, name: string) => exported(node) && (!reexported || reexported.has(name) || /^index$/.test(noExt(path.posix.basename(f.rel))));
+        const isPublic = (node: ts.Node, name: string) =>
+          exported(node) &&
+          (!reexported || reexported.has(name) || /^index$/.test(noExt(path.posix.basename(f.rel))));
 
         for (const st of f.sf.statements) {
           if (ts.isFunctionDeclaration(st) && st.name && st.body) {
@@ -321,9 +407,18 @@ export class TypeScriptAdapter {
           } else if (ts.isVariableStatement(st)) {
             for (const d of st.declarationList.declarations) {
               if (!ts.isIdentifier(d.name) || !isFunctionLike(d.initializer)) continue;
-              addOp(f, d.name.text, d.name.text, d, d.initializer, isPublic(st, d.name.text) ? [] : ['internal'], st);
+              addOp(
+                f,
+                d.name.text,
+                d.name.text,
+                d,
+                d.initializer,
+                isPublic(st, d.name.text) ? [] : ['internal'],
+                st,
+              );
             }
-            if (!st.declarationList.declarations.some((d) => isFunctionLike(d.initializer))) block.topLevel.push({ node: st, sf: f });
+            if (!st.declarationList.declarations.some((d) => isFunctionLike(d.initializer)))
+              block.topLevel.push({ node: st, sf: f });
           } else if (ts.isClassDeclaration(st) && st.name) {
             blockOfClass.set(st, block);
             const className = st.name.text;
@@ -332,26 +427,54 @@ export class TypeScriptAdapter {
             for (const clause of st.heritageClauses ?? []) {
               if (clause.token !== ts.SyntaxKind.ImplementsKeyword) continue;
               for (const t of clause.types) {
-                const decl = checker.getTypeAtLocation(t.expression).getSymbol()?.declarations?.[0] ?? checker.getSymbolAtLocation(t.expression)?.declarations?.[0];
-                const target = decl && ts.isImportSpecifier(decl) ? checker.getAliasedSymbol(checker.getSymbolAtLocation(t.expression)!).declarations?.[0] : decl;
+                const decl =
+                  checker.getTypeAtLocation(t.expression).getSymbol()?.declarations?.[0] ??
+                  checker.getSymbolAtLocation(t.expression)?.declarations?.[0];
+                const target =
+                  decl && ts.isImportSpecifier(decl)
+                    ? checker.getAliasedSymbol(checker.getSymbolAtLocation(t.expression)!).declarations?.[0]
+                    : decl;
                 if (target) implementers.set(target, [...(implementers.get(target) ?? []), st]);
               }
             }
             for (const m of st.members) {
-              if (!ts.isMethodDeclaration(m) || !m.body || !ts.isIdentifier(m.name)) continue;
-              const flags = ts.getCombinedModifierFlags(m);
-              const hidden = (flags & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)) !== 0 || m.name.text.startsWith('_');
+              // Methods, and properties that hold a function (handler = () => ...), are operations.
+              const fn =
+                ts.isMethodDeclaration(m) && m.body
+                  ? m
+                  : ts.isPropertyDeclaration(m) && isFunctionLike(m.initializer)
+                    ? m.initializer
+                    : undefined;
+              if (!fn || !m.name || !ts.isIdentifier(m.name)) continue;
+              const flags = ts.getCombinedModifierFlags(m as ts.Declaration);
+              const hidden =
+                (flags & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)) !== 0 ||
+                m.name.text.startsWith('_');
               const name = own ? m.name.text : `${className}.${m.name.text}`;
-              addOp(f, name, `${className}.${m.name.text}`, m, m, pub && !hidden ? [] : ['internal'], m);
+              addOp(f, name, `${className}.${m.name.text}`, m, fn, pub && !hidden ? [] : ['internal'], m);
             }
             if (!block.summary && own) {
               const doc = docOf(st);
               if (doc) block.summary = { text: doc, node: st, sf: f };
             }
-          } else if (ts.isInterfaceDeclaration(st) || ts.isTypeAliasDeclaration(st) || ts.isEnumDeclaration(st)) {
+          } else if (
+            ts.isInterfaceDeclaration(st) ||
+            ts.isTypeAliasDeclaration(st) ||
+            ts.isEnumDeclaration(st)
+          ) {
             if (!exported(st)) continue;
-            const kind = ts.isInterfaceDeclaration(st) ? 'interface' : ts.isEnumDeclaration(st) ? 'enum' : 'type';
-            block.data.push({ entity: { kind: 'data', path: noExt(f.rel), name: st.name.text }, name: st.name.text, signature: `${kind} ${st.name.text}`, decl: st, sf: f });
+            const kind = ts.isInterfaceDeclaration(st)
+              ? 'interface'
+              : ts.isEnumDeclaration(st)
+                ? 'enum'
+                : 'type';
+            block.data.push({
+              entity: { kind: 'data', path: noExt(f.rel), name: st.name.text },
+              name: st.name.text,
+              signature: `${kind} ${st.name.text}`,
+              decl: st,
+              sf: f,
+            });
           } else if (ts.isExpressionStatement(st)) {
             block.topLevel.push({ node: st, sf: f });
           }
@@ -366,8 +489,14 @@ export class TypeScriptAdapter {
       }
       if (!block.summary) {
         const f = block.files[0]!;
-        const publics = f.sf.statements.filter((s) => exported(s) && (ts.isFunctionDeclaration(s) || ts.isClassDeclaration(s) || ts.isInterfaceDeclaration(s)));
-        const named = publics.find((s) => (s as ts.DeclarationStatement).name?.text.toLowerCase() === primary) ?? (publics.length === 1 ? publics[0] : undefined);
+        const publics = f.sf.statements.filter(
+          (s) =>
+            exported(s) &&
+            (ts.isFunctionDeclaration(s) || ts.isClassDeclaration(s) || ts.isInterfaceDeclaration(s)),
+        );
+        const named =
+          publics.find((s) => (s as ts.DeclarationStatement).name?.text.toLowerCase() === primary) ??
+          (publics.length === 1 ? publics[0] : undefined);
         const doc = named ? docOf(named) : undefined;
         if (named && doc) block.summary = { text: doc, node: named, sf: f };
       }
@@ -383,7 +512,11 @@ export class TypeScriptAdapter {
       const handler = call.arguments.at(-1);
       if (!first || !handler || call.arguments.length < 2) return undefined;
       const literal = first.match(ROUTE_LITERAL);
-      const route = literal ? `${literal[1]} ${literal[2]}` : HTTP_VERBS.has(method) && first.startsWith('/') ? `${method.toUpperCase()} ${first}` : undefined;
+      const route = literal
+        ? `${literal[1]} ${literal[2]}`
+        : HTTP_VERBS.has(method) && first.startsWith('/')
+          ? `${method.toUpperCase()} ${first}`
+          : undefined;
       return route ? { route, handler } : undefined;
     };
     for (const block of blocks) {
@@ -392,7 +525,12 @@ export class TypeScriptAdapter {
           const hit = routeOf(node);
           if (hit && isFunctionLike(hit.handler)) {
             const op: OpDraft = {
-              entity: { kind: 'operation', path: noExt(f.rel), name: `route:${hit.route}`, shape: sha(hit.handler.getText().replace(/\s+/g, ' ')) },
+              entity: {
+                kind: 'operation',
+                path: noExt(f.rel),
+                name: `route:${hit.route}`,
+                shape: sha(hit.handler.getText().replace(/\s+/g, ' ')),
+              },
               name: hit.route,
               signature: hit.route,
               decl: node,
@@ -415,32 +553,47 @@ export class TypeScriptAdapter {
 
     // ---- 4. Identity.
     const areaDirs = new Set<string>();
-    const rootArea = [...new Set(blocks.map((b) => b.dir))].some((d) => d !== commonRoot && d !== '.') ? '' : null;
     for (const block of blocks) {
       let dir = block.dir === '.' ? '' : block.dir;
       while (dir.length > commonRoot.length) {
-        areaDirs.add(dir);
+        if (dir !== primaryRoot) areaDirs.add(dir);
         dir = dir.includes('/') ? path.posix.dirname(dir) : '';
       }
     }
     const coreName = [...areaDirs].some((d) => path.posix.basename(d) === 'core') ? 'root' : 'core';
-    const rootAreaEntity: Entity = { kind: 'area', path: commonRoot || '.', name: coreName };
+    const rootAreaEntity: Entity = { kind: 'area', path: primaryRoot || '.', name: coreName };
     const areaEntity = (dir: string): Entity => ({ kind: 'area', path: dir, name: '' });
     const systemEntity: Entity = { kind: 'system', path: '.', name: '' };
-    const needsRootArea = blocks.some((b) => b.dir === commonRoot || b.dir === '.');
+    const atRoot = (dir: string) => dir === commonRoot || dir === primaryRoot || dir === '.';
+    const needsRootArea = blocks.some((b) => atRoot(b.dir));
 
-    const entities: Entity[] = [systemEntity, ...[...areaDirs].map(areaEntity), ...(needsRootArea ? [rootAreaEntity] : [])];
-    for (const b of blocks) entities.push(b.entity, ...b.ops.map((o) => o.entity), ...b.data.map((d) => d.entity));
+    const entities: Entity[] = [
+      systemEntity,
+      ...[...areaDirs].map(areaEntity),
+      ...(needsRootArea ? [rootAreaEntity] : []),
+    ];
+    for (const b of blocks)
+      entities.push(b.entity, ...b.ops.map((o) => o.entity), ...b.data.map((d) => d.entity));
     const assigned = assignIds(entities, input.ids, input.renames ?? {});
     const idOf = assigned.idOf;
-    void rootArea;
 
     // ---- 5. Nodes.
     const nodes: DeckNode[] = [];
     const systemId = idOf(systemEntity);
-    nodes.push({ id: systemId, kind: 'system', name: systemName, parentId: null, bullets: [], source: [], coverage: 'full' });
+    nodes.push({
+      id: systemId,
+      kind: 'system',
+      name: systemName,
+      parentId: null,
+      bullets: [],
+      source: [],
+      coverage: 'full',
+    });
     const areaName = (dir: string) => {
-      const words = path.posix.basename(dir).split(/[-_.]+/).join(' ');
+      const words = path.posix
+        .basename(dir)
+        .split(/[-_.]+/)
+        .join(' ');
       return humanize(words.replace(/ /g, '_'));
     };
     for (const dir of [...areaDirs].sort()) {
@@ -449,14 +602,22 @@ export class TypeScriptAdapter {
         id: idOf(areaEntity(dir)),
         kind: 'area',
         name: areaName(dir),
-        parentId: parentDir.length > commonRoot.length && areaDirs.has(parentDir) ? idOf(areaEntity(parentDir)) : systemId,
+        parentId: areaDirs.has(parentDir) ? idOf(areaEntity(parentDir)) : systemId,
         bullets: [],
         source: [{ path: dir, startLine: 1, endLine: 1, hash: '' }],
         coverage: 'full',
       });
     }
     if (needsRootArea) {
-      nodes.push({ id: idOf(rootAreaEntity), kind: 'area', name: humanize(coreName), parentId: systemId, bullets: [], source: [{ path: commonRoot || '.', startLine: 1, endLine: 1, hash: '' }], coverage: 'full' });
+      nodes.push({
+        id: idOf(rootAreaEntity),
+        kind: 'area',
+        name: humanize(coreName),
+        parentId: systemId,
+        bullets: [],
+        source: [{ path: primaryRoot || '.', startLine: 1, endLine: 1, hash: '' }],
+        coverage: 'full',
+      });
     }
 
     const blockId = new Map<BlockDraft, Id>();
@@ -474,7 +635,14 @@ export class TypeScriptAdapter {
     const stats = { callSites: 0, resolvedCallSites: 0, imports: 0, resolvedImports: 0 };
     const projectFiles = new Set(files.map((f) => f.sf));
 
-    const addEdge = (from: Id, to: Id, kind: EdgeKind, evidence: SourceRef | undefined, label?: string, indirect?: string) => {
+    const addEdge = (
+      from: Id,
+      to: Id,
+      kind: EdgeKind,
+      evidence: SourceRef | undefined,
+      label?: string,
+      indirect?: string,
+    ) => {
       if (from === to) return;
       const id = hashId('edge', `${from}>${to}:${kind}`);
       const edge = edges.get(id);
@@ -482,21 +650,41 @@ export class TypeScriptAdapter {
         if (evidence && edge.evidence.length < 8) edge.evidence.push(evidence);
         return;
       }
-      edges.set(id, { id, from, to, kind, label, indirect, bullets: [], evidence: evidence ? [evidence] : [] });
+      edges.set(id, {
+        id,
+        from,
+        to,
+        kind,
+        label,
+        indirect,
+        bullets: [],
+        evidence: evidence ? [evidence] : [],
+      });
     };
 
     type Target = { id: Id; block: BlockDraft; op?: OpDraft; indirect?: string };
     /** What a call resolves to: project operations, something outside, or a gap. */
-    const resolve = (call: ts.CallExpression | ts.NewExpression): { targets: Target[]; gap?: GapReason; counted: boolean } => {
+    const resolve = (
+      call: ts.CallExpression | ts.NewExpression,
+    ): { targets: Target[]; gap?: GapReason; counted: boolean } => {
       const expr = call.expression;
       if (expr.kind === ts.SyntaxKind.ImportKeyword) {
-        return literalText(call.arguments?.[0]) ? { targets: [], counted: true } : { targets: [], gap: 'dynamic-import', counted: true };
+        return literalText(call.arguments?.[0])
+          ? { targets: [], counted: true }
+          : { targets: [], gap: 'dynamic-import', counted: true };
       }
       if (expr.kind === ts.SyntaxKind.SuperKeyword) return { targets: [], counted: false };
-      if (ts.isIdentifier(expr) && expr.text === 'eval') return { targets: [], gap: 'unsupported', counted: true };
-      if (ts.isElementAccessExpression(expr) && !literalText(expr.argumentExpression)) return { targets: [], gap: 'dynamic-call', counted: true };
-      const nameNode = ts.isPropertyAccessExpression(expr) ? expr.name : ts.isElementAccessExpression(expr) ? expr.argumentExpression : expr;
-      if (!ts.isIdentifier(nameNode) && !ts.isPrivateIdentifier(nameNode) && !ts.isStringLiteral(nameNode)) return { targets: [], counted: false };
+      if (ts.isIdentifier(expr) && expr.text === 'eval')
+        return { targets: [], gap: 'unsupported', counted: true };
+      if (ts.isElementAccessExpression(expr) && !literalText(expr.argumentExpression))
+        return { targets: [], gap: 'dynamic-call', counted: true };
+      const nameNode = ts.isPropertyAccessExpression(expr)
+        ? expr.name
+        : ts.isElementAccessExpression(expr)
+          ? expr.argumentExpression
+          : expr;
+      if (!ts.isIdentifier(nameNode) && !ts.isPrivateIdentifier(nameNode) && !ts.isStringLiteral(nameNode))
+        return { targets: [], counted: false };
 
       let symbol = checker.getSymbolAtLocation(nameNode);
       if (symbol && symbol.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
@@ -513,19 +701,37 @@ export class TypeScriptAdapter {
         return { targets: block ? [{ id: blockId.get(block)!, block }] : [], counted: true };
       }
       // A call through an interface goes to every implementation in the repository.
-      if ((ts.isMethodSignature(decl) || ts.isPropertySignature(decl)) && ts.isInterfaceDeclaration(decl.parent)) {
+      if (
+        (ts.isMethodSignature(decl) || ts.isPropertySignature(decl)) &&
+        ts.isInterfaceDeclaration(decl.parent)
+      ) {
         const targets: Target[] = [];
         for (const cls of implementers.get(decl.parent) ?? []) {
-          const method = cls.members.find((m) => ts.isMethodDeclaration(m) && m.name.getText() === decl.name.getText());
+          const method = cls.members.find(
+            (m) => ts.isMethodDeclaration(m) && m.name.getText() === decl.name.getText(),
+          );
           const found = method ? opOfDecl.get(method) : undefined;
-          if (found) targets.push({ id: opId.get(found.op)!, block: found.block, op: found.op, indirect: `via ${decl.parent.name.text}` });
+          if (found)
+            targets.push({
+              id: opId.get(found.op)!,
+              block: found.block,
+              op: found.op,
+              indirect: `via ${decl.parent.name.text}`,
+            });
         }
         return { targets, counted: true };
       }
       const found = opOfDecl.get(decl);
-      if (found) return { targets: [{ id: opId.get(found.op)!, block: found.block, op: found.op }], counted: true };
+      if (found)
+        return { targets: [{ id: opId.get(found.op)!, block: found.block, op: found.op }], counted: true };
       // Parameters, locals and properties holding functions: a value being invoked.
-      if (ts.isParameter(decl) || ts.isVariableDeclaration(decl) || ts.isPropertyDeclaration(decl) || ts.isPropertySignature(decl) || ts.isBindingElement(decl)) {
+      if (
+        ts.isParameter(decl) ||
+        ts.isVariableDeclaration(decl) ||
+        ts.isPropertyDeclaration(decl) ||
+        ts.isPropertySignature(decl) ||
+        ts.isBindingElement(decl)
+      ) {
         const any = (checker.getTypeAtLocation(nameNode).flags & ts.TypeFlags.Any) !== 0;
         return any ? { targets: [], gap: 'untyped', counted: true } : { targets: [], counted: false };
       }
@@ -556,7 +762,14 @@ export class TypeScriptAdapter {
         }
         for (const t of res.targets) {
           const api = op?.tags.includes('api') && t.block !== block && t.op;
-          addEdge(from, t.id, api ? 'api' : 'call', ref(f, call, op?.name), api ? humanize(t.op!.name.split('.').at(-1)!).toLowerCase() : undefined, t.indirect);
+          addEdge(
+            from,
+            t.id,
+            api ? 'api' : 'call',
+            ref(f, call, op?.name),
+            api ? humanize(t.op!.name.split('.').at(-1)!).toLowerCase() : undefined,
+            t.indirect,
+          );
           if (op && t.op && t.block !== block) borrowed.set(op, [...(borrowed.get(op) ?? []), t.op]);
         }
       });
@@ -596,13 +809,19 @@ export class TypeScriptAdapter {
           }
           if (relative) {
             // A relative import that resolves to a file outside the map (a barrel, a test helper) is fine.
-            if (target === 'external' || checker.getSymbolAtLocation(st.moduleSpecifier)) stats.resolvedImports += 1;
+            if (target === 'external' || checker.getSymbolAtLocation(st.moduleSpecifier))
+              stats.resolvedImports += 1;
             else gaps.push({ ownerId: blockId.get(block)!, reason: 'parse-error', source: ref(f, st) });
             continue;
           }
           if (target === 'external') stats.resolvedImports += 1;
           const bare = spec.replace(/^node:/, '');
-          const pkg = spec.startsWith('node:') || BUILTINS.has(bare.split('/')[0]!) ? `node:${bare.split('/')[0]}` : spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0]!;
+          const pkg =
+            spec.startsWith('node:') || BUILTINS.has(bare.split('/')[0]!)
+              ? `node:${bare.split('/')[0]}`
+              : spec.startsWith('@')
+                ? spec.split('/').slice(0, 2).join('/')
+                : spec.split('/')[0]!;
           let extId = externals.get(pkg);
           if (!extId) {
             extId = hashId('external', pkg);
@@ -616,7 +835,7 @@ export class TypeScriptAdapter {
     // ---- 7. Emit blocks, operations and data.
     const parentOf = (block: BlockDraft): Id => {
       const dir = block.dir === '.' ? '' : block.dir;
-      if (dir.length > commonRoot.length && areaDirs.has(dir)) return idOf(areaEntity(dir));
+      if (areaDirs.has(dir)) return idOf(areaEntity(dir));
       return needsRootArea ? idOf(rootAreaEntity) : systemId;
     };
     for (const block of [...blocks].sort((a, b) => a.entity.path.localeCompare(b.entity.path))) {
@@ -629,17 +848,42 @@ export class TypeScriptAdapter {
         name: block.name,
         parentId: parentOf(block),
         summary: block.summary
-          ? { id: hashId('bullet', `${id}:summary`), text: block.summary.text, origin: 'declared', basis: 'doc', derivedFrom: ref(block.summary.sf, block.summary.node) }
+          ? {
+              id: hashId('bullet', `${id}:summary`),
+              text: block.summary.text,
+              origin: 'declared',
+              basis: 'doc',
+              derivedFrom: ref(block.summary.sf, block.summary.node),
+            }
           : undefined,
         bullets: [],
-        source: block.files.map((f) => ({ path: f.rel, startLine: 1, endLine: f.sf.getLineAndCharacterOfPosition(f.sf.getEnd()).line + 1, hash: sha(f.sf.text) })).sort((a, b) => (a.path === main.rel ? -1 : b.path === main.rel ? 1 : a.path.localeCompare(b.path))),
+        source: block.files
+          .map((f) => ({
+            path: f.rel,
+            startLine: 1,
+            endLine: f.sf.getLineAndCharacterOfPosition(f.sf.getEnd()).line + 1,
+            hash: sha(f.sf.text),
+          }))
+          .sort((a, b) =>
+            a.path === main.rel ? -1 : b.path === main.rel ? 1 : a.path.localeCompare(b.path),
+          ),
         coverage: count > 0 ? 'partial' : 'full',
-        tags: block.topLevel.some((t) => ts.isExpressionStatement(t.node) && ts.isCallExpression(t.node.expression)) ? ['entry'] : undefined,
+        tags: block.topLevel.some(
+          (t) => ts.isExpressionStatement(t.node) && ts.isCallExpression(t.node.expression),
+        )
+          ? ['entry']
+          : undefined,
       });
       const ordered = [...block.ops].sort((a, b) => {
         const fa = fileOf(a.decl).rel;
         const fb = fileOf(b.decl).rel;
-        return fa === fb ? a.decl.getStart() - b.decl.getStart() : fa === main.rel ? -1 : fb === main.rel ? 1 : fa.localeCompare(fb);
+        return fa === fb
+          ? a.decl.getStart() - b.decl.getStart()
+          : fa === main.rel
+            ? -1
+            : fb === main.rel
+              ? 1
+              : fa.localeCompare(fb);
       });
       for (const op of ordered) {
         const oid = opId.get(op)!;
@@ -647,16 +891,56 @@ export class TypeScriptAdapter {
         const source = ref(f, op.decl, op.name);
         const bullets: Bullet[] = [];
         const doc = op.doc ?? op.borrow;
-        if (doc) bullets.push({ id: hashId('bullet', `${oid}:doc`), text: doc, origin: 'declared', basis: 'doc', derivedFrom: source });
-        bullets.push({ id: hashId('bullet', `${oid}:name`), text: op.entity.name.startsWith('route:') ? op.name : humanize(op.name.split('.').at(-1)!), origin: 'declared', basis: 'name', derivedFrom: source });
-        nodes.push({ id: oid, kind: 'operation', name: op.name, parentId: id, bullets, signature: op.signature, source: [source], coverage: 'full', tags: op.tags.length ? [...op.tags].sort() : undefined });
+        if (doc)
+          bullets.push({
+            id: hashId('bullet', `${oid}:doc`),
+            text: doc,
+            origin: 'declared',
+            basis: 'doc',
+            derivedFrom: source,
+          });
+        bullets.push({
+          id: hashId('bullet', `${oid}:name`),
+          text: op.entity.name.startsWith('route:') ? op.name : humanize(op.name.split('.').at(-1)!),
+          origin: 'declared',
+          basis: 'name',
+          derivedFrom: source,
+        });
+        nodes.push({
+          id: oid,
+          kind: 'operation',
+          name: op.name,
+          parentId: id,
+          bullets,
+          signature: op.signature,
+          source: [source],
+          coverage: 'full',
+          tags: op.tags.length ? [...op.tags].sort() : undefined,
+        });
       }
       for (const d of [...block.data].sort((a, b) => a.decl.getStart() - b.decl.getStart())) {
-        nodes.push({ id: idOf(d.entity), kind: 'data', name: d.name, parentId: id, bullets: [], signature: d.signature, source: [ref(d.sf, d.decl, d.name)], coverage: 'full' });
+        nodes.push({
+          id: idOf(d.entity),
+          kind: 'data',
+          name: d.name,
+          parentId: id,
+          bullets: [],
+          signature: d.signature,
+          source: [ref(d.sf, d.decl, d.name)],
+          coverage: 'full',
+        });
       }
     }
     for (const [pkg, id] of [...externals].sort(([a], [b]) => a.localeCompare(b))) {
-      nodes.push({ id, kind: 'external', name: pkg, parentId: systemId, bullets: [], source: [], coverage: 'full' });
+      nodes.push({
+        id,
+        kind: 'external',
+        name: pkg,
+        parentId: systemId,
+        bullets: [],
+        source: [],
+        coverage: 'full',
+      });
     }
 
     // ---- 8. Tests: each hangs off the operations its body calls directly.
@@ -699,7 +983,9 @@ export class TypeScriptAdapter {
               name: title,
               suite,
               source: ref(f, node),
-              targets: [...targets].map(([id, via]) => ({ id, via })).sort((a, b) => a.id.localeCompare(b.id)),
+              targets: [...targets]
+                .map(([id, via]) => ({ id, via }))
+                .sort((a, b) => a.id.localeCompare(b.id)),
             });
             return;
           }
@@ -717,11 +1003,22 @@ export class TypeScriptAdapter {
       nodes,
       edges: [...edges.values()].sort((a, b) => a.id.localeCompare(b.id)),
       tests: deckTests,
-      gaps: gaps.sort((a, b) => a.source.path.localeCompare(b.source.path) || a.source.startLine - b.source.startLine),
-      stats: { files: files.length, lines: files.reduce((n, f) => n + f.sf.getLineAndCharacterOfPosition(f.sf.getEnd()).line + 1, 0), ...stats },
+      gaps: gaps.sort(
+        (a, b) => a.source.path.localeCompare(b.source.path) || a.source.startLine - b.source.startLine,
+      ),
+      stats: {
+        files: files.length,
+        lines: files.reduce((n, f) => n + f.sf.getLineAndCharacterOfPosition(f.sf.getEnd()).line + 1, 0),
+        ...stats,
+      },
     };
     snapshotSchema.parse(snapshot);
-    return { snapshot, ids: assigned.ids, suggestions: assigned.suggestions, ms: Math.round(performance.now() - started) };
+    return {
+      snapshot,
+      ids: assigned.ids,
+      suggestions: assigned.suggestions,
+      ms: Math.round(performance.now() - started),
+    };
   }
 
   /** Names a barrel index re-exports from its directory. */
@@ -744,6 +1041,9 @@ export class TypeScriptAdapter {
 /** Directories worth watching: everything under the root that can hold source. */
 export function watchRoots(root: string): string[] {
   return readdirSync(root, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && !['node_modules', '.git', '.deck', 'dist', 'build', 'coverage'].includes(d.name))
+    .filter(
+      (d) =>
+        d.isDirectory() && !['node_modules', '.git', '.deck', 'dist', 'build', 'coverage'].includes(d.name),
+    )
     .map((d) => path.join(root, d.name));
 }

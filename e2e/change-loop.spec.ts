@@ -3,8 +3,8 @@
 // through the harness in host mode, because this machine has no container runtime.
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-import { type Page, expect, test } from '@playwright/test';
-import { type Deck, cleanup, idOf, openTray, startDecker, waitForState } from './decker';
+import { expect, type Page, test } from '@playwright/test';
+import { cleanup, type Deck, idOf, openTray, startDecker, waitForState } from './decker';
 import { arrow, block, canvas, flyTo, setZoom } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
@@ -42,7 +42,9 @@ async function openReview(page: Page, title: string | RegExp): Promise<void> {
   await expect(page.getByTestId('review-banner')).toContainText('Reviewing');
 }
 
-test('the demo: a requested API, a flawed candidate caught by a harness test, a revision, and acceptance', async ({ page }) => {
+test('the demo: a requested API, a flawed candidate caught by a harness test, a revision, and acceptance', async ({
+  page,
+}) => {
   await deck.open(page);
   const orders = await idOf(page, 'Orders');
   const inventory = await idOf(page, 'Inventory');
@@ -62,22 +64,35 @@ test('the demo: a requested API, a flawed candidate caught by a harness test, a 
   await page.mouse.up();
   await page.getByTestId('kind-api').click();
   await page.getByTestId('edge-label').fill('Reserve stock');
-  await page.getByTestId('edge-bullets').fill(
-    ['Reserve every item before confirming an order', 'Never reserve only part of an order', 'Retrying the same request must not reserve stock twice', 'Return which items are unavailable'].join('\n'),
-  );
+  await page
+    .getByTestId('edge-bullets')
+    .fill(
+      [
+        'Reserve every item before confirming an order',
+        'Never reserve only part of an order',
+        'Retrying the same request must not reserve stock twice',
+        'Return which items are unavailable',
+      ].join('\n'),
+    );
   await page.getByTestId('edge-submit').click();
 
   // 3. The arrow appears dashed and "Requested". Nothing has been sent to an agent.
   const requested = arrow(page, orders, inventory);
   await expect(requested).toHaveAttribute('data-s', 'requested');
-  expect(await requested.locator('.dd-edge-line').evaluate((el) => getComputedStyle(el).strokeDasharray)).not.toBe('none');
-  await expect(page.getByTestId('arrow-pill').filter({ hasText: 'Reserve stock' })).toContainText('Requested');
+  expect(
+    await requested.locator('.dd-edge-line').evaluate((el) => getComputedStyle(el).strokeDasharray),
+  ).not.toBe('none');
+  await expect(page.getByTestId('arrow-pill').filter({ hasText: 'Reserve stock' })).toContainText(
+    'Requested',
+  );
   const title = /Reserve stock/;
   await openTray(page);
   await expect(card(page, title).getByTestId('change-state')).toHaveText('Draft');
   await card(page, title).getByTestId('as-text').click();
   await expect(card(page, title).getByTestId('deck-text')).toContainText('-> Inventory: API Reserve stock');
-  await expect(card(page, title).getByTestId('deck-text')).toContainText('▪ Never reserve only part of an order');
+  await expect(card(page, title).getByTestId('deck-text')).toContainText(
+    '▪ Never reserve only part of an order',
+  );
   await card(page, title).getByTestId('as-text').click();
 
   // 4. The plan: an interface, a checklist with a test for each requirement, and two questions.
@@ -104,13 +119,19 @@ test('the demo: a requested API, a flawed candidate caught by a harness test, a 
   await expect(page.locator('[data-testid="finding"][data-kind="supported"]')).toHaveCount(3);
   await expect(page.locator('[data-testid="finding"][data-kind="implemented"]')).toHaveCount(1);
   await expect(page.locator('[data-testid="check"]').filter({ hasText: 'tests' })).toContainText('Failed');
-  await expect(page.locator('[data-testid="check"]').filter({ hasText: 'typecheck' })).toContainText('Passed');
+  await expect(page.locator('[data-testid="check"]').filter({ hasText: 'typecheck' })).toContainText(
+    'Passed',
+  );
   // The agent said "All tests pass". That is shown nowhere as evidence.
   await expect(page.getByTestId('review-panel')).not.toContainText('All tests pass');
 
   // On the map: the new arrow is real now (solid), and the block that broke the requirement says so.
   await expect(arrow(page, orders, inventory)).toHaveAttribute('data-s', 'implemented');
-  expect(await arrow(page, orders, inventory).locator('.dd-edge-line').evaluate((el) => getComputedStyle(el).strokeDasharray)).toBe('none');
+  expect(
+    await arrow(page, orders, inventory)
+      .locator('.dd-edge-line')
+      .evaluate((el) => getComputedStyle(el).strokeDasharray),
+  ).toBe('none');
   await expect(block(page, 'Inventory').getByTestId('badge-contradicted')).toBeVisible();
   // The chip shows the failure the harness found, and flags the tests the agent added.
   await expect(block(page, 'Inventory').getByTestId('tests-chip')).toContainText('✕1/11');
@@ -125,7 +146,9 @@ test('the demo: a requested API, a flawed candidate caught by a harness test, a 
   // Each changed element has its code diff.
   await block(page, 'Inventory').click();
   await page.getByTestId('tab-diff').click();
-  await expect(page.getByTestId('diff')).toContainText('reserve(orderId: OrderId, items: LineItem[], idempotencyKey: string)');
+  await expect(page.getByTestId('diff')).toContainText(
+    'reserve(orderId: OrderId, items: LineItem[], idempotencyKey: string)',
+  );
   await page.keyboard.press('Escape');
 
   // 6. Revise. The second candidate passes, and Accept merges it.
@@ -153,7 +176,12 @@ test('the demo: a requested API, a flawed candidate caught by a harness test, a 
   await expect(pill).not.toContainText('Requested');
   await page.keyboard.press('Escape');
   await pill.click();
-  await expect(page.getByTestId('panel-bullet').filter({ hasText: 'Never reserve only part of an order' }).locator('.dd-mark')).toHaveAttribute('data-o', 'authored');
+  await expect(
+    page
+      .getByTestId('panel-bullet')
+      .filter({ hasText: 'Never reserve only part of an order' })
+      .locator('.dd-mark'),
+  ).toHaveAttribute('data-o', 'authored');
   await expect(page.getByTestId('panel')).toContainText('Limit: Should a reservation expire? No expiry');
   await expect(page.getByTestId('panel')).toContainText('Limit: Where are reservations kept? In memory');
   // Tests chips come from the harness run on exactly this code.
@@ -165,7 +193,9 @@ test('the demo: a requested API, a flawed candidate caught by a harness test, a 
   expect(codeStatus()).toBe('');
 });
 
-test('an edit nobody asked for is marked Unrequested, and Reject leaves the working tree untouched', async ({ page }) => {
+test('an edit nobody asked for is marked Unrequested, and Reject leaves the working tree untouched', async ({
+  page,
+}) => {
   await deck.open(page);
   const head = deck.git('rev-parse', 'HEAD');
   await requestBullet(page, 'Inventory', 'Warn about low stock');
@@ -195,21 +225,31 @@ test('an edit nobody asked for is marked Unrequested, and Reject leaves the work
 test('a test the agent deleted is flagged on the tests chip in review', async ({ page }) => {
   await deck.open(page);
   await flyTo(page, 'Inventory');
-  await block(page, 'Inventory').locator('.dd-bullet-text', { hasText: 'Adjust stock by hand, never below zero' }).click();
-  await block(page, 'Inventory').locator('input.dd-inline-edit').fill('Adjust stock by hand, allowing a negative balance');
+  await block(page, 'Inventory')
+    .locator('.dd-bullet-text', { hasText: 'Adjust stock by hand, never below zero' })
+    .click();
+  await block(page, 'Inventory')
+    .locator('input.dd-inline-edit')
+    .fill('Adjust stock by hand, allowing a negative balance');
   await page.keyboard.press('Enter');
   await submitAndApprove(page, /negative/);
   await openReview(page, /negative/);
   await expect(block(page, 'Inventory').getByTestId('tests-chip')).toContainText('1 deleted');
   await expect(block(page, 'Inventory').getByTestId('tests-chip')).toContainText('+1 new');
-  await expect(page.locator('[data-testid="test-delta"][data-kind="deleted"]')).toContainText('never lets stock go below zero');
-  await expect(page.locator('[data-testid="finding"][data-kind="supported"]')).toContainText('Stock may go below zero');
+  await expect(page.locator('[data-testid="test-delta"][data-kind="deleted"]')).toContainText(
+    'never lets stock go below zero',
+  );
+  await expect(page.locator('[data-testid="finding"][data-kind="supported"]')).toContainText(
+    'Stock may go below zero',
+  );
   await page.getByTestId('reject').click();
   await openTray(page);
   await waitForState(page, /negative/, 'Rejected', 30_000);
 });
 
-test('two changes run in parallel worktrees; accepting the second after the base moved forces a rebase and a re-check', async ({ page }) => {
+test('two changes run in parallel worktrees; accepting the second after the base moved forces a rebase and a re-check', async ({
+  page,
+}) => {
   await deck.open(page);
   await requestBullet(page, 'Catalog', 'Search products by name');
   await submitAndApprove(page, /Search products/);
@@ -219,16 +259,22 @@ test('two changes run in parallel worktrees; accepting the second after the base
   await waitForState(page, /low stock again/, 'In review');
   expect(deck.git('worktree', 'list').split('\n')).toHaveLength(3);
 
-  await card(page, /Search products/).getByTestId('open-review').click();
+  await card(page, /Search products/)
+    .getByTestId('open-review')
+    .click();
   await page.getByTestId('accept').click();
   await openTray(page);
   await waitForState(page, /Search products/, 'Accepted', 30_000);
   const moved = deck.git('rev-parse', 'HEAD');
 
   // The second candidate was built on the old base. Accept refuses, rebases, and checks again.
-  await card(page, /low stock again/).getByTestId('open-review').click();
+  await card(page, /low stock again/)
+    .getByTestId('open-review')
+    .click();
   await page.getByTestId('accept').click();
-  await expect(page.getByTestId('toast').filter({ hasText: 'The base had moved' })).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByTestId('toast').filter({ hasText: 'The base had moved' })).toBeVisible({
+    timeout: 120_000,
+  });
   expect(deck.git('rev-parse', 'HEAD')).toBe(moved);
   await openReview(page, /low stock again/);
   await page.getByTestId('accept').click();
@@ -240,13 +286,17 @@ test('two changes run in parallel worktrees; accepting the second after the base
   expect(deck.read('src/inventory/index.ts')).toContain('isLow(sku: Sku)');
   expect(codeStatus()).toBe('');
   await flyTo(page, 'Catalog');
-  await expect(page.getByTestId('panel-bullet').filter({ hasText: 'Search products by name' }).first()).toBeVisible();
+  await expect(
+    page.getByTestId('panel-bullet').filter({ hasText: 'Search products by name' }).first(),
+  ).toBeVisible();
 });
 
 test('an accepted change is reverted through a revert candidate and the same review', async ({ page }) => {
   await deck.open(page);
   await openTray(page);
-  await card(page, /^Add “Search products by name”/).getByTestId('revert').click();
+  await card(page, /^Add “Search products by name”/)
+    .getByTestId('revert')
+    .click();
   await openReview(page, /Revert: /);
   await expect(page.locator('[data-testid="finding"]').filter({ hasText: 'Restores Catalog' })).toBeVisible();
   await page.getByTestId('accept').click();
@@ -258,12 +308,16 @@ test('an accepted change is reverted through a revert candidate and the same rev
   await expect(page.getByTestId('panel-op').filter({ hasText: 'search(' })).toHaveCount(0);
 });
 
-test('stopping the server mid-run marks the change failed and never leaves the working branch half-changed', async ({ page }) => {
+test('stopping the server mid-run marks the change failed and never leaves the working branch half-changed', async ({
+  page,
+}) => {
   await deck.open(page);
   await requestBullet(page, 'Ids', 'Read the prefix slowly');
   await submitAndApprove(page, /slowly/);
   await waitForState(page, /slowly/, 'Implementing', 30_000);
-  await expect(card(page, /slowly/).getByTestId('progress')).toContainText('Applying stored candidate', { timeout: 20_000 });
+  await expect(card(page, /slowly/).getByTestId('progress')).toContainText('Applying stored candidate', {
+    timeout: 20_000,
+  });
   const head = deck.git('rev-parse', 'HEAD');
   await deck.stop();
   expect(deck.git('rev-parse', 'HEAD')).toBe(head);
@@ -273,12 +327,18 @@ test('stopping the server mid-run marks the change failed and never leaves the w
   await deck.open(page);
   await openTray(page);
   await waitForState(page, /slowly/, 'Failed', 30_000);
-  await expect(card(page, /slowly/)).toContainText('The server stopped while implementing. Nothing was merged.');
+  await expect(card(page, /slowly/)).toContainText(
+    'The server stopped while implementing. Nothing was merged.',
+  );
   expect(deck.git('worktree', 'list').split('\n')).toHaveLength(1);
   // It can be tried again, and this time it gets to review.
-  await card(page, /slowly/).getByTestId('retry').click();
+  await card(page, /slowly/)
+    .getByTestId('retry')
+    .click();
   await waitForState(page, /slowly/, 'In review');
-  await card(page, /slowly/).getByTestId('open-review').click();
+  await card(page, /slowly/)
+    .getByTestId('open-review')
+    .click();
   await page.getByTestId('reject').click();
   expect(deck.git('rev-parse', 'HEAD')).toBe(head);
 });

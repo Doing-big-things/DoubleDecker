@@ -14,7 +14,10 @@ const TIMEOUT_MS = 10 * 60_000;
 export function detectRuntime(): 'docker' | 'podman' | null {
   for (const cli of ['docker', 'podman'] as const) {
     try {
-      execFileSync(cli, ['version', '--format', '{{.Server.Version}}'], { stdio: ['ignore', 'pipe', 'ignore'], timeout: 8000 });
+      execFileSync(cli, ['version', '--format', '{{.Server.Version}}'], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 8000,
+      });
       return cli;
     } catch {
       // not installed, or not running
@@ -51,7 +54,24 @@ function collect(child: ReturnType<typeof spawn>, timeoutMs = TIMEOUT_MS): Promi
   });
 }
 
-const HOST_ENV = ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP', 'TMPDIR', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'ProgramFiles', 'windir', 'LANG'];
+const HOST_ENV = [
+  'PATH',
+  'Path',
+  'SystemRoot',
+  'SYSTEMROOT',
+  'ComSpec',
+  'PATHEXT',
+  'TEMP',
+  'TMP',
+  'TMPDIR',
+  'HOME',
+  'USERPROFILE',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'ProgramFiles',
+  'windir',
+  'LANG',
+];
 
 /** No isolation: commands run on this machine, in the worktree, with a scrubbed environment. */
 export class HostSandbox implements Sandbox {
@@ -66,7 +86,9 @@ export class HostSandbox implements Sandbox {
   run(command: string): Promise<RunResult> {
     const env: Record<string, string> = { CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' };
     for (const key of HOST_ENV) if (process.env[key]) env[key] = process.env[key]!;
-    return collect(spawn(command, { cwd: this.cwd, shell: true, env: { ...env, ...this.extraEnv }, windowsHide: true }));
+    return collect(
+      spawn(command, { cwd: this.cwd, shell: true, env: { ...env, ...this.extraEnv }, windowsHide: true }),
+    );
   }
 }
 
@@ -84,18 +106,29 @@ function baseArgs(spec: ContainerSpec, network: boolean): string[] {
   return [
     '--rm',
     ...(network ? [] : ['--network', 'none']),
-    '--user', 'node',
+    '--user',
+    'node',
     '--read-only',
-    '--tmpfs', '/tmp:exec',
-    '--tmpfs', '/home/node',
-    '--cpus', '2',
-    '--memory', '3g',
-    '--pids-limit', '512',
-    '--env', 'CI=1',
-    '--env', 'NO_COLOR=1',
-    '--env', 'HOME=/home/node',
-    '--volume', `${spec.mount}:/work`,
-    '--workdir', rel ? `/work/${rel}` : '/work',
+    '--tmpfs',
+    '/tmp:exec',
+    '--tmpfs',
+    '/home/node',
+    '--cpus',
+    '2',
+    '--memory',
+    '3g',
+    '--pids-limit',
+    '512',
+    '--env',
+    'CI=1',
+    '--env',
+    'NO_COLOR=1',
+    '--env',
+    'HOME=/home/node',
+    '--volume',
+    `${spec.mount}:/work`,
+    '--workdir',
+    rel ? `/work/${rel}` : '/work',
   ];
 }
 
@@ -110,22 +143,35 @@ export class ContainerSandbox implements Sandbox {
 
   /** Prepare: install dependencies from the lockfile, install scripts disabled, network on. */
   static prepare(spec: ContainerSpec): Promise<RunResult> {
-    const install = 'if [ -f package-lock.json ]; then npm ci --ignore-scripts --no-audit --no-fund; elif [ -f package.json ]; then npm install --ignore-scripts --no-audit --no-fund; fi';
-    return collect(spawn(spec.cli, ['run', ...baseArgs(spec, true), spec.image, 'sh', '-lc', install], { windowsHide: true }));
+    const install =
+      'if [ -f package-lock.json ]; then npm ci --ignore-scripts --no-audit --no-fund; elif [ -f package.json ]; then npm install --ignore-scripts --no-audit --no-fund; fi';
+    return collect(
+      spawn(spec.cli, ['run', ...baseArgs(spec, true), spec.image, 'sh', '-lc', install], {
+        windowsHide: true,
+      }),
+    );
   }
 
   /** A fresh container for one check, so nothing an agent left running can influence it. */
   static check(spec: ContainerSpec, command: string, env: Record<string, string> = {}): Promise<RunResult> {
     const envArgs = Object.entries(env).flatMap(([k, v]) => ['--env', `${k}=${v}`]);
-    return collect(spawn(spec.cli, ['run', ...baseArgs(spec, false), ...envArgs, spec.image, 'sh', '-lc', command], { windowsHide: true }));
+    return collect(
+      spawn(spec.cli, ['run', ...baseArgs(spec, false), ...envArgs, spec.image, 'sh', '-lc', command], {
+        windowsHide: true,
+      }),
+    );
   }
 
   private start(): Promise<string> {
     return new Promise((resolve, reject) => {
-      execFile(this.spec.cli, ['run', '--detach', ...baseArgs(this.spec, false), this.spec.image, 'sleep', 'infinity'], (err, stdout) => {
-        if (err) reject(err);
-        else resolve(stdout.trim());
-      });
+      execFile(
+        this.spec.cli,
+        ['run', '--detach', ...baseArgs(this.spec, false), this.spec.image, 'sleep', 'infinity'],
+        (err, stdout) => {
+          if (err) reject(err);
+          else resolve(stdout.trim());
+        },
+      );
     });
   }
 

@@ -68,7 +68,8 @@ export function withNotes(snapshot: DeckSnapshot, notes: DeckNotes | null): Deck
   if (!notes) return snapshot;
   const dismissed = new Set(notes.dismissed);
   const marked = notes.edges ?? {};
-  const hasNotes = Object.keys(notes.bullets).length > 0 || dismissed.size > 0 || Object.keys(marked).length > 0;
+  const hasNotes =
+    Object.keys(notes.bullets).length > 0 || dismissed.size > 0 || Object.keys(marked).length > 0;
   if (!hasNotes) return snapshot;
   const apply = <T extends { id: Id; bullets: Bullet[] }>(item: T): T => {
     const extra = notes.bullets[item.id];
@@ -97,7 +98,15 @@ export function buildIndex(snapshot: DeckSnapshot): DeckIndex {
     if (n.parentId) push(children, n.parentId, n);
   }
   if (!system) {
-    system = { id: 'sys_empty', kind: 'system', name: 'empty', parentId: null, bullets: [], source: [], coverage: 'full' };
+    system = {
+      id: 'sys_empty',
+      kind: 'system',
+      name: 'empty',
+      parentId: null,
+      bullets: [],
+      source: [],
+      coverage: 'full',
+    };
   }
 
   const blockOf = new Map<Id, Id>();
@@ -259,7 +268,13 @@ export function operationsOf(index: DeckIndex, blockId: Id): DeckNode[] {
 /** The single bullet an operation shows: authored, then doc comment, then AI summary, then its name. */
 export function bestBullet(node: DeckNode): Bullet | undefined {
   const rank = (b: Bullet) =>
-    b.origin === 'authored' ? 0 : b.origin === 'declared' && b.basis !== 'name' ? 1 : b.origin === 'summarized' ? 2 : 3;
+    b.origin === 'authored'
+      ? 0
+      : b.origin === 'declared' && b.basis !== 'name'
+        ? 1
+        : b.origin === 'summarized'
+          ? 2
+          : 3;
   let best: Bullet | undefined;
   for (const b of node.bullets) if (!best || rank(b) < rank(best)) best = b;
   return best;
@@ -327,7 +342,15 @@ export function testStats(tests: readonly DeckTest[], run: TestRun | null): Test
   const total = tests.length;
   const notRun = total - passed - failed - skipped;
   const state =
-    total === 0 ? 'none' : failed > 0 ? 'fail' : passed === total ? 'pass' : passed > 0 || skipped > 0 ? 'partial' : 'notrun';
+    total === 0
+      ? 'none'
+      : failed > 0
+        ? 'fail'
+        : passed === total
+          ? 'pass'
+          : passed > 0 || skipped > 0
+            ? 'partial'
+            : 'notrun';
   return { total, passed, failed, skipped, notRun, state };
 }
 

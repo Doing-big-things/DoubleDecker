@@ -9,7 +9,11 @@ export function startServer(port: number): { close(): void } {
     req.on('data', (chunk: Buffer) => chunks.push(chunk));
     req.on('end', () => {
       const text = Buffer.concat(chunks).toString('utf8');
-      const result = shop.router.dispatch(req.method ?? 'GET', req.url ?? '/', text ? JSON.parse(text) : undefined);
+      const result = shop.router.dispatch(
+        req.method ?? 'GET',
+        req.url ?? '/',
+        text ? JSON.parse(text) : undefined,
+      );
       res.writeHead(result.status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(result.body));
     });

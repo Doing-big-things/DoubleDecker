@@ -1,9 +1,10 @@
 // M1: `decker examples/shop` shows the real map (spec §11).
-import { type Server, createServer } from 'node:http';
+
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
-import { type Deck, cleanup, idOf, startDecker } from './decker';
+import { cleanup, type Deck, idOf, startDecker } from './decker';
 import { block, canvas, flyTo, ready } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
@@ -28,7 +29,9 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => cleanup(deck));
 
-test('the real map: areas, blocks, coverage, the opaque construct, and one click to the code', async ({ page }) => {
+test('the real map: areas, blocks, coverage, the opaque construct, and one click to the code', async ({
+  page,
+}) => {
   await deck.open(page);
   await expect(page.getByTestId('breadcrumb')).toHaveText(/^up-/);
   for (const name of ['Catalog', 'HTTP', 'Inventory', 'Orders', 'Payments', 'Shared']) {
@@ -47,7 +50,9 @@ test('the real map: areas, blocks, coverage, the opaque construct, and one click
 
   // Route registrations are operations tagged api, described by the operation each one calls.
   await flyTo(page, 'Routes');
-  await expect(page.getByTestId('panel-bullet').filter({ hasText: 'Place an order from a cart' })).toBeVisible();
+  await expect(
+    page.getByTestId('panel-bullet').filter({ hasText: 'Place an order from a cart' }),
+  ).toBeVisible();
   await expect(page.getByTestId('panel-op').filter({ hasText: 'POST /orders' })).toContainText('api');
 
   // A block and an operation each open their source at the right line.
@@ -58,17 +63,25 @@ test('the real map: areas, blocks, coverage, the opaque construct, and one click
   await page.getByTestId('tab-overview').click();
   await page.getByTestId('panel-op').filter({ hasText: 'receive(' }).click();
   await page.getByTestId('tab-source').click();
-  const line = deck.read('src/inventory/index.ts').split('\n').findIndex((l) => l.includes('receive(sku')) + 1;
+  const line =
+    deck
+      .read('src/inventory/index.ts')
+      .split('\n')
+      .findIndex((l) => l.includes('receive(sku')) + 1;
   await expect(page.getByTestId('code-peek')).toContainText(`src/inventory/index.ts:${line}`);
   await expect(page.locator('.dd-code-line.is-hl').first()).toContainText('receive(sku: Sku, units: number)');
 
   // Open in editor passes the file and line to the configured editor command.
   rmSync(record(), { force: true });
   await page.getByTestId('open-editor').click();
-  await expect.poll(() => (existsSync(record()) ? readFileSync(record(), 'utf8') : '')).toMatch(new RegExp(`inventory[\\\\/]index\\.ts\\|${line}$`));
+  await expect
+    .poll(() => (existsSync(record()) ? readFileSync(record(), 'utf8') : ''))
+    .toMatch(new RegExp(`inventory[\\\\/]index\\.ts\\|${line}$`));
 });
 
-test('tests hang off the operations they call; status comes only from a harness run on the current code', async ({ page }) => {
+test('tests hang off the operations they call; status comes only from a harness run on the current code', async ({
+  page,
+}) => {
   await deck.open(page);
   await flyTo(page, 'Inventory');
   const chip = block(page, 'Inventory').getByTestId('tests-chip');
@@ -85,7 +98,10 @@ test('tests hang off the operations they call; status comes only from a harness 
   await expect(block(page, 'Orders').getByTestId('tests-chip')).toHaveText('✓7');
 
   // The code changes: the old result no longer describes it, and the block is marked changed since the baseline.
-  deck.write('src/inventory/index.ts', `${deck.read('src/inventory/index.ts')}\n// stock is counted in whole units\n`);
+  deck.write(
+    'src/inventory/index.ts',
+    `${deck.read('src/inventory/index.ts')}\n// stock is counted in whole units\n`,
+  );
   await flyTo(page, 'Inventory');
   await expect(chip).toHaveText('5', { timeout: 15_000 });
   await expect(block(page, 'Inventory').locator('.dd-baseline')).toBeVisible();
@@ -110,8 +126,13 @@ test('a one-file edit updates the map within budget and moves nothing else', asy
   await flyTo(page, 'Products');
   const before = await page.evaluate(() => JSON.stringify(window.__decker.store.getState().positions));
   const started = Date.now();
-  deck.write('src/catalog/products.ts', `${deck.read('src/catalog/products.ts')}\n/** Pick the products to show on the front page. */\nexport function featured(products: Product[]): Product[] {\n  return products.slice(0, 3);\n}\n`);
-  await expect(block(page, 'Products')).toContainText('Pick the products to show on the front page', { timeout: 10_000 });
+  deck.write(
+    'src/catalog/products.ts',
+    `${deck.read('src/catalog/products.ts')}\n/** Pick the products to show on the front page. */\nexport function featured(products: Product[]): Product[] {\n  return products.slice(0, 3);\n}\n`,
+  );
+  await expect(block(page, 'Products')).toContainText('Pick the products to show on the front page', {
+    timeout: 10_000,
+  });
   const elapsed = Date.now() - started;
   console.log(`  measured: map update after a one-file edit ${elapsed} ms`);
   expect(elapsed).toBeLessThan(2000);
@@ -132,18 +153,39 @@ test('ids, layout and authored bullets survive a file rename and a function rena
   await page.mouse.move(box.x + 90, box.y + 80, { steps: 8 });
   await page.mouse.up();
   const placed = await page.evaluate((id) => window.__decker.store.getState().positions[id], pricing);
-  await deck.api('/api/notes', { method: 'PATCH', body: JSON.stringify({ version: 1, dismissed: [], bullets: { [pricing]: [{ id: 'bul_authored1', text: 'Prices never include shipping', origin: 'authored' }] } }) });
+  await deck.api('/api/notes', {
+    method: 'PATCH',
+    body: JSON.stringify({
+      version: 1,
+      dismissed: [],
+      bullets: {
+        [pricing]: [{ id: 'bul_authored1', text: 'Prices never include shipping', origin: 'authored' }],
+      },
+    }),
+  });
   await page.waitForTimeout(600);
 
   // Rename the file. Git reports the rename, so the block keeps its identity.
   deck.git('mv', 'src/orders/pricing.ts', 'src/orders/price-rules.ts');
-  deck.write('src/orders/index.ts', deck.read('src/orders/index.ts').replace("from './pricing'", "from './price-rules'"));
-  deck.write('src/orders/pricing.test.ts', deck.read('src/orders/pricing.test.ts').replace("from './pricing'", "from './price-rules'"));
+  deck.write(
+    'src/orders/index.ts',
+    deck.read('src/orders/index.ts').replace("from './pricing'", "from './price-rules'"),
+  );
+  deck.write(
+    'src/orders/pricing.test.ts',
+    deck.read('src/orders/pricing.test.ts').replace("from './pricing'", "from './price-rules'"),
+  );
   await expect(block(page, 'PriceRules')).toHaveCount(1, { timeout: 15_000 });
   expect(await idOf(page, 'PriceRules')).toBe(pricing);
   await expect(block(page, 'Pricing')).toHaveCount(0);
-  expect(await page.evaluate((id) => window.__decker.store.getState().positions[id], pricing)).toEqual(placed);
-  await expect(block(page, 'PriceRules').locator('.dd-bullet', { hasText: 'Prices never include shipping' }).locator('.dd-mark')).toHaveAttribute('data-o', 'authored');
+  expect(await page.evaluate((id) => window.__decker.store.getState().positions[id], pricing)).toEqual(
+    placed,
+  );
+  await expect(
+    block(page, 'PriceRules')
+      .locator('.dd-bullet', { hasText: 'Prices never include shipping' })
+      .locator('.dd-mark'),
+  ).toHaveAttribute('data-o', 'authored');
   // Its tests still hang off it.
   await expect(block(page, 'PriceRules').getByTestId('tests-chip')).toHaveText(/3/);
 
@@ -151,11 +193,14 @@ test('ids, layout and authored bullets survive a file rename and a function rena
   const opId = (name: string) =>
     page.evaluate((n) => {
       const st = window.__decker.store.getState();
-      return st.index.snapshot.nodes.find((x: { kind: string; name: string }) => x.kind === 'operation' && x.name === n)?.id as string | undefined;
+      return st.index.snapshot.nodes.find(
+        (x: { kind: string; name: string }) => x.kind === 'operation' && x.name === n,
+      )?.id as string | undefined;
     }, name);
   const original = await opId('lineTotal');
   expect(original).toBeTruthy();
-  for (const file of ['src/orders/price-rules.ts', 'src/orders/pricing.test.ts']) deck.write(file, deck.read(file).replaceAll('lineTotal', 'linePrice'));
+  for (const file of ['src/orders/price-rules.ts', 'src/orders/pricing.test.ts'])
+    deck.write(file, deck.read(file).replaceAll('lineTotal', 'linePrice'));
   await expect(page.getByTestId('renames')).toContainText('lineTotal', { timeout: 15_000 });
   await expect(page.getByTestId('renames')).toContainText('linePrice');
   expect(await opId('linePrice')).not.toBe(original);
@@ -164,7 +209,9 @@ test('ids, layout and authored bullets survive a file rename and a function rena
   await expect.poll(() => opId('linePrice')).toBe(original);
 });
 
-test('with a model configured, summaries stream in and are labeled; without one the map already worked', async ({ page }) => {
+test('with a model configured, summaries stream in and are labeled; without one the map already worked', async ({
+  page,
+}) => {
   // A stand-in for any OpenAI-compatible endpoint, including a local one.
   let calls = 0;
   const model: Server = createServer((req, res) => {
@@ -175,7 +222,10 @@ test('with a model configured, summaries stream in and are labeled; without one 
     req.on('end', () => {
       calls += 1;
       const name = (JSON.parse(text).messages[1].content as string).match(/Block "(\w+)"/)?.[1] ?? 'This';
-      const content = JSON.stringify({ summary: `${name}, summarized`, bullets: [{ text: `Guards ${name} against bad input`, startLine: 3, endLine: 5 }] });
+      const content = JSON.stringify({
+        summary: `${name}, summarized`,
+        bullets: [{ text: `Guards ${name} against bad input`, startLine: 3, endLine: 5 }],
+      });
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ choices: [{ message: { content } }] }));
     });
@@ -197,7 +247,12 @@ test('with a model configured, summaries stream in and are labeled; without one 
     // Pinning makes it authored; unchanged code is never summarized twice.
     await bullet.hover();
     await bullet.getByTitle('Keep this as an authored bullet').click();
-    await expect(page.getByTestId('panel-bullet').filter({ hasText: 'Guards Cart against bad input' }).locator('.dd-mark')).toHaveAttribute('data-o', 'authored');
+    await expect(
+      page
+        .getByTestId('panel-bullet')
+        .filter({ hasText: 'Guards Cart against bad input' })
+        .locator('.dd-mark'),
+    ).toHaveAttribute('data-o', 'authored');
     const made = calls;
     expect(made).toBeGreaterThan(10);
     await deck.restart();

@@ -14,7 +14,10 @@ export type Marks = Map<Id, Mark>;
 
 const authored = (id: Id, text: string): Bullet => ({ id, text, origin: 'authored' });
 
-export function applyOps(snapshot: DeckSnapshot, ops: readonly ChangeOp[]): { snapshot: DeckSnapshot; marks: Marks } {
+export function applyOps(
+  snapshot: DeckSnapshot,
+  ops: readonly ChangeOp[],
+): { snapshot: DeckSnapshot; marks: Marks } {
   const marks: Marks = new Map();
   if (ops.length === 0) return { snapshot, marks };
 
@@ -63,7 +66,8 @@ export function applyOps(snapshot: DeckSnapshot, ops: readonly ChangeOp[]): { sn
           if (e) edgePatch.set(e.id, { ...e, bullets: [...e.bullets, authored(op.id, op.text)] });
           else {
             const i = newEdges.findIndex((x) => x.id === op.targetId);
-            if (i >= 0) newEdges[i] = { ...newEdges[i]!, bullets: [...newEdges[i]!.bullets, authored(op.id, op.text)] };
+            if (i >= 0)
+              newEdges[i] = { ...newEdges[i]!, bullets: [...newEdges[i]!.bullets, authored(op.id, op.text)] };
           }
         }
         marks.set(op.id, { state: 'requested', opId: op.id });
@@ -73,7 +77,11 @@ export function applyOps(snapshot: DeckSnapshot, ops: readonly ChangeOp[]): { sn
         const n = node(op.targetId);
         if (n) {
           const swap = (b: Bullet) => (b.id === op.bulletId ? { ...b, text: op.text } : b);
-          nodePatch.set(n.id, { ...n, bullets: n.bullets.map(swap), summary: n.summary ? swap(n.summary) : undefined });
+          nodePatch.set(n.id, {
+            ...n,
+            bullets: n.bullets.map(swap),
+            summary: n.summary ? swap(n.summary) : undefined,
+          });
         }
         marks.set(op.bulletId, { state: 'changed', opId: op.id, before: op.before });
         break;

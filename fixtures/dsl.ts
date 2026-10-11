@@ -7,13 +7,13 @@ import {
   type DeckNode,
   type DeckTest,
   type EdgeKind,
+  fnv1a,
   type Gap,
   type GapReason,
-  type SourceRef,
-  type TestStatus,
-  fnv1a,
   hashId,
   humanize,
+  type SourceRef,
+  type TestStatus,
 } from '@decker/deck-model';
 
 export interface OpSpec {
@@ -47,12 +47,24 @@ export interface BlockSpec {
   looseTests?: { title: string; via: 'imports' | 'name' }[];
 }
 
-export const op = (sig: string, text: string, rest: Omit<OpSpec, 'sig' | 'text'> = {}): OpSpec => ({ sig, text, ...rest });
+export const op = (sig: string, text: string, rest: Omit<OpSpec, 'sig' | 'text'> = {}): OpSpec => ({
+  sig,
+  text,
+  ...rest,
+});
 
 function parseBullet(raw: string, key: string, sigName: string, ref: SourceRef): Bullet {
-  if (raw.startsWith('◦ ')) return { id: hashId('bullet', key), text: raw.slice(2), origin: 'summarized', derivedFrom: ref };
+  if (raw.startsWith('◦ '))
+    return { id: hashId('bullet', key), text: raw.slice(2), origin: 'summarized', derivedFrom: ref };
   if (raw.startsWith('▪ ')) return { id: hashId('bullet', key), text: raw.slice(2), origin: 'authored' };
-  if (raw === '~') return { id: hashId('bullet', key), text: humanize(sigName), origin: 'declared', basis: 'name', derivedFrom: ref };
+  if (raw === '~')
+    return {
+      id: hashId('bullet', key),
+      text: humanize(sigName),
+      origin: 'declared',
+      basis: 'name',
+      derivedFrom: ref,
+    };
   return { id: hashId('bullet', key), text: raw, origin: 'declared', basis: 'doc', derivedFrom: ref };
 }
 
@@ -74,7 +86,15 @@ export class DeckBuilder {
   constructor(name: string) {
     this.name = name;
     this.systemId = hashId('system', name);
-    this.nodes.push({ id: this.systemId, kind: 'system', name, parentId: null, bullets: [], source: [], coverage: 'full' });
+    this.nodes.push({
+      id: this.systemId,
+      kind: 'system',
+      name,
+      parentId: null,
+      bullets: [],
+      source: [],
+      coverage: 'full',
+    });
   }
 
   area(name: string, body: () => void, summary?: string): void {
@@ -85,7 +105,9 @@ export class DeckBuilder {
       kind: 'area',
       name,
       parentId,
-      summary: summary ? { id: hashId('bullet', `${id}:summary`), text: summary, origin: 'declared', basis: 'doc' } : undefined,
+      summary: summary
+        ? { id: hashId('bullet', `${id}:summary`), text: summary, origin: 'declared', basis: 'doc' }
+        : undefined,
       bullets: [],
       source: [],
       coverage: 'full',
@@ -100,7 +122,15 @@ export class DeckBuilder {
     if (!id) {
       id = hashId('external', pkg);
       this.externals.set(pkg, id);
-      this.nodes.push({ id, kind: 'external', name: pkg, parentId: this.systemId, bullets: [], source: [], coverage: 'full' });
+      this.nodes.push({
+        id,
+        kind: 'external',
+        name: pkg,
+        parentId: this.systemId,
+        bullets: [],
+        source: [],
+        coverage: 'full',
+      });
     }
     return id;
   }
@@ -112,14 +142,24 @@ export class DeckBuilder {
 
     // Write a plausible source file so the code peek has something real to show.
     const lines: string[] = [`/** ${spec.summary}. */`, ''];
-    for (const u of spec.uses ?? []) lines.push(`import * as ${u.replace(/[^a-z]/gi, '') || 'dep'} from '${u}';`);
+    for (const u of spec.uses ?? [])
+      lines.push(`import * as ${u.replace(/[^a-z]/gi, '') || 'dep'} from '${u}';`);
     if (spec.uses?.length) lines.push('');
     const dataNodes: DeckNode[] = [];
     for (const d of spec.data ?? []) {
       const start = lines.length + 1;
       const dataName = d.replace(/^(interface|type|enum|class)\s+/, '').split(/[\s<{=]/)[0]!;
-      lines.push(`export ${d.includes('{') || d.includes('=') ? d : d.startsWith('type') ? `${d} = string;` : `${d} {}`}`, '');
-      const ref: SourceRef = { path: spec.path, symbol: dataName, startLine: start, endLine: start, hash: fnv1a(d) };
+      lines.push(
+        `export ${d.includes('{') || d.includes('=') ? d : d.startsWith('type') ? `${d} = string;` : `${d} {}`}`,
+        '',
+      );
+      const ref: SourceRef = {
+        path: spec.path,
+        symbol: dataName,
+        startLine: start,
+        endLine: start,
+        hash: fnv1a(d),
+      };
       dataNodes.push({
         id: hashId('data', `${spec.path}#${dataName}`),
         kind: 'data',
@@ -133,7 +173,11 @@ export class DeckBuilder {
     }
 
     const opNodes: DeckNode[] = [];
-    const testLines: string[] = [`import { describe, expect, it } from 'vitest';`, `import * as subject from './${spec.path.split('/').at(-1)!.replace(/\.ts$/, '')}';`, ''];
+    const testLines: string[] = [
+      `import { describe, expect, it } from 'vitest';`,
+      `import * as subject from './${spec.path.split('/').at(-1)!.replace(/\.ts$/, '')}';`,
+      '',
+    ];
     const testPath = spec.path.replace(/\.ts$/, '.test.ts');
     let hasTests = false;
 
@@ -145,11 +189,29 @@ export class DeckBuilder {
       if (isDoc) lines.push(`/** ${o.text}. */`);
       const start = lines.length + 1;
       const body = (o.calls ?? []).map((c) => `  ${c.replace(/^(\w)/, (m) => m.toLowerCase())}();`);
-      lines.push(`${o.internal ? '' : 'export '}function ${o.sig} {`, ...(body.length ? body : ['  // …']), '}', '');
+      lines.push(
+        `${o.internal ? '' : 'export '}function ${o.sig} {`,
+        ...(body.length ? body : ['  // …']),
+        '}',
+        '',
+      );
       const end = lines.length - 1;
-      const ref: SourceRef = { path: spec.path, symbol: opName, startLine: start, endLine: end, hash: fnv1a(o.sig) };
+      const ref: SourceRef = {
+        path: spec.path,
+        symbol: opName,
+        startLine: start,
+        endLine: end,
+        hash: fnv1a(o.sig),
+      };
       const bullets: Bullet[] = [parseBullet(o.text, `${opId}:b`, opName, ref)];
-      if (o.text !== '~') bullets.push({ id: hashId('bullet', `${opId}:name`), text: humanize(opName), origin: 'declared', basis: 'name', derivedFrom: ref });
+      if (o.text !== '~')
+        bullets.push({
+          id: hashId('bullet', `${opId}:name`),
+          text: humanize(opName),
+          origin: 'declared',
+          basis: 'name',
+          derivedFrom: ref,
+        });
       const tags = [...(o.tags ?? []), ...(o.internal ? ['internal'] : [])];
       opNodes.push({
         id: opId,
@@ -197,7 +259,15 @@ export class DeckBuilder {
             label,
             indirect,
             bullets: [],
-            evidence: [{ path: spec.path, symbol: opName, startLine: start + 1, endLine: start + 1, hash: fnv1a(target) }],
+            evidence: [
+              {
+                path: spec.path,
+                symbol: opName,
+                startLine: start + 1,
+                endLine: start + 1,
+                hash: fnv1a(target),
+              },
+            ],
           });
         });
       };
@@ -224,18 +294,33 @@ export class DeckBuilder {
     this.sources[spec.path] = lines.join('\n');
     if (hasTests) this.sources[testPath] = testLines.join('\n');
 
-    const blockRef: SourceRef = { path: spec.path, startLine: 1, endLine: lines.length, hash: fnv1a(lines.join('\n')) };
+    const blockRef: SourceRef = {
+      path: spec.path,
+      startLine: 1,
+      endLine: lines.length,
+      hash: fnv1a(lines.join('\n')),
+    };
     const notes = (spec.notes ?? []).map((n, i) => parseBullet(n, `${id}:note${i}`, name, blockRef));
     (spec.gaps ?? []).forEach((reason, i) => {
       const line = Math.min(lines.length, 4 + i * 3);
-      this.gaps.push({ ownerId: id, reason, source: { path: spec.path, startLine: line, endLine: line, hash: fnv1a(`${reason}${i}`) } });
+      this.gaps.push({
+        ownerId: id,
+        reason,
+        source: { path: spec.path, startLine: line, endLine: line, hash: fnv1a(`${reason}${i}`) },
+      });
     });
     this.nodes.push({
       id,
       kind: 'block',
       name,
       parentId,
-      summary: { id: hashId('bullet', `${id}:summary`), text: spec.summary, origin: 'declared', basis: 'doc', derivedFrom: { ...blockRef, endLine: 1 } },
+      summary: {
+        id: hashId('bullet', `${id}:summary`),
+        text: spec.summary,
+        origin: 'declared',
+        basis: 'doc',
+        derivedFrom: { ...blockRef, endLine: 1 },
+      },
       bullets: notes,
       source: [blockRef],
       coverage: spec.coverage ?? (spec.gaps?.length ? 'partial' : 'full'),
@@ -258,7 +343,14 @@ export class DeckBuilder {
       this.pending.push(() => {
         const to = this.blockIds.get(target);
         if (!to) throw new Error(`fixture: unknown type owner "${target}" from ${name}`);
-        this.edges.push({ id: hashId('edge', `${id}->${to}:data`), from: id, to, kind: 'data', bullets: [], evidence: [] });
+        this.edges.push({
+          id: hashId('edge', `${id}->${to}:data`),
+          from: id,
+          to,
+          kind: 'data',
+          bullets: [],
+          evidence: [],
+        });
       });
     }
   }

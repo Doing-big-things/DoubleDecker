@@ -1,7 +1,7 @@
 // The camera: jumps, history, and the zoom bands that drive level of detail (spec §3.4, §3.5).
 import type { Id } from '@decker/deck-model';
-import type { ReactFlowInstance, Viewport } from '@xyflow/react';
-import { type Display, boundsOf } from '../model/layout';
+import { getViewportForBounds, type ReactFlowInstance, type Viewport } from '@xyflow/react';
+import { boundsOf, type Display } from '../model/layout';
 
 export type Level = 'system' | 'architecture' | 'blocks';
 
@@ -33,7 +33,8 @@ export function bandVars(band: number): Record<string, string> {
   const lower = BANDS[band]!;
   const level = levelOf(band);
   const ts = textScale(band);
-  const title = level === 'blocks' ? 14 * ts : level === 'architecture' ? Math.min(13 / lower, 40) : 14 / lower;
+  const title =
+    level === 'blocks' ? 14 * ts : level === 'architecture' ? Math.min(13 / lower, 40) : 14 / lower;
   return {
     '--ts': ts.toFixed(3),
     '--ms': Math.max(1, 1 / lower).toFixed(3),
@@ -93,11 +94,19 @@ export const camera = {
   },
   center(): { x: number; y: number } {
     const vp = this.viewport();
-    return { x: ((element?.clientWidth ?? 0) / 2 - vp.x) / vp.zoom, y: ((element?.clientHeight ?? 0) / 2 - vp.y) / vp.zoom };
+    return {
+      x: ((element?.clientWidth ?? 0) / 2 - vp.x) / vp.zoom,
+      y: ((element?.clientHeight ?? 0) / 2 - vp.y) / vp.zoom,
+    };
   },
   visibleRect(): { x: number; y: number; w: number; h: number } {
     const vp = this.viewport();
-    return { x: -vp.x / vp.zoom, y: -vp.y / vp.zoom, w: (element?.clientWidth ?? 0) / vp.zoom, h: (element?.clientHeight ?? 0) / vp.zoom };
+    return {
+      x: -vp.x / vp.zoom,
+      y: -vp.y / vp.zoom,
+      w: (element?.clientWidth ?? 0) / vp.zoom,
+      h: (element?.clientHeight ?? 0) / vp.zoom,
+    };
   },
   record(selectedId: Id | null): void {
     if (!rf) return;
@@ -108,7 +117,12 @@ export const camera = {
   fit(animate = true): void {
     const bounds = boundsOf(display);
     if (!rf || !bounds) return;
-    void rf.fitBounds(bounds, { padding: 0.06, duration: animate && !reducedMotion() ? 350 : 0, ease: easeOut, interpolate: 'smooth' });
+    void rf.fitBounds(bounds, {
+      padding: 0.06,
+      duration: animate && !reducedMotion() ? 350 : 0,
+      ease: easeOut,
+      interpolate: 'smooth',
+    });
   },
   /** Fly to one or more nodes. Blocks land at a zoom where their card can be read. */
   flyTo(ids: Id | Id[], opts: { zoom?: number; fitArea?: boolean } = {}): void {
@@ -122,10 +136,28 @@ export const camera = {
     if (only?.kind === 'block' && !opts.fitArea) {
       const now = rf.getViewport().zoom;
       const zoom = opts.zoom ?? (now >= 0.88 && now <= 1.5 ? now : 1);
-      void rf.setCenter(cx, cy, { zoom, duration: duration({ x: cx, y: cy }), ease: easeOut, interpolate: 'smooth' });
+      void rf.setCenter(cx, cy, {
+        zoom,
+        duration: duration({ x: cx, y: cy }),
+        ease: easeOut,
+        interpolate: 'smooth',
+      });
       return;
     }
-    void rf.fitBounds(bounds, { padding: list.length > 1 ? 0.3 : 0.12, duration: duration({ x: cx, y: cy }), ease: easeOut, interpolate: 'smooth' });
+    // Fit the target, but never magnify past 100%: a fly-to lands where text is at its designed size.
+    const viewport = getViewportForBounds(
+      bounds,
+      element.clientWidth,
+      element.clientHeight,
+      MIN_ZOOM,
+      1,
+      list.length > 1 ? 0.3 : 0.12,
+    );
+    void rf.setViewport(viewport, {
+      duration: duration({ x: cx, y: cy }),
+      ease: easeOut,
+      interpolate: 'smooth',
+    });
   },
   /** Pan just enough to bring a node on screen, without changing zoom. */
   reveal(id: Id): void {
@@ -133,11 +165,19 @@ export const camera = {
     if (!rf || !element || !box) return;
     const v = this.visibleRect();
     const margin = 40 / this.viewport().zoom;
-    const inside = box.ax >= v.x + margin && box.ay >= v.y + margin && box.ax + box.w <= v.x + v.w - margin && box.ay + box.h <= v.y + v.h - margin;
+    const inside =
+      box.ax >= v.x + margin &&
+      box.ay >= v.y + margin &&
+      box.ax + box.w <= v.x + v.w - margin &&
+      box.ay + box.h <= v.y + v.h - margin;
     if (inside) return;
     const cx = box.ax + box.w / 2;
     const cy = box.ay + box.h / 2;
-    void rf.setCenter(cx, cy, { zoom: this.viewport().zoom, duration: reducedMotion() ? 0 : 250, ease: easeOut });
+    void rf.setCenter(cx, cy, {
+      zoom: this.viewport().zoom,
+      duration: reducedMotion() ? 0 : 250,
+      ease: easeOut,
+    });
   },
   zoomBy(factor: number): void {
     if (!rf) return;
@@ -153,14 +193,22 @@ export const camera = {
     const entry = past.pop();
     if (!rf || !entry) return null;
     future.push({ viewport: rf.getViewport(), selectedId: current });
-    void rf.setViewport(entry.viewport, { duration: reducedMotion() ? 0 : 350, ease: easeOut, interpolate: 'smooth' });
+    void rf.setViewport(entry.viewport, {
+      duration: reducedMotion() ? 0 : 350,
+      ease: easeOut,
+      interpolate: 'smooth',
+    });
     return entry;
   },
   forward(current: Id | null): Entry | null {
     const entry = future.pop();
     if (!rf || !entry) return null;
     past.push({ viewport: rf.getViewport(), selectedId: current });
-    void rf.setViewport(entry.viewport, { duration: reducedMotion() ? 0 : 350, ease: easeOut, interpolate: 'smooth' });
+    void rf.setViewport(entry.viewport, {
+      duration: reducedMotion() ? 0 : 350,
+      ease: easeOut,
+      interpolate: 'smooth',
+    });
     return entry;
   },
 };

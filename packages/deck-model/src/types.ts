@@ -150,7 +150,14 @@ export type ChangeOp =
     }
   | { id: Id; type: 'add_block'; parentId: Id; name: string; bullets: string[]; position?: Point }
   | { id: Id; type: 'rename'; targetId: Id; name: string; before: string }
-  | { id: Id; type: 'remove'; targetId: Id; targetType: 'node' | 'edge' | 'bullet'; ownerId?: Id; label: string };
+  | {
+      id: Id;
+      type: 'remove';
+      targetId: Id;
+      targetType: 'node' | 'edge' | 'bullet';
+      ownerId?: Id;
+      label: string;
+    };
 
 export type ChangeOpType = ChangeOp['type'];
 
@@ -194,7 +201,14 @@ export interface Plan {
   approved: boolean;
 }
 
-export type CandidateStatus = 'implementing' | 'checking' | 'in_review' | 'accepted' | 'rejected' | 'failed' | 'superseded';
+export type CandidateStatus =
+  | 'implementing'
+  | 'checking'
+  | 'in_review'
+  | 'accepted'
+  | 'rejected'
+  | 'failed'
+  | 'superseded';
 
 export interface Candidate {
   n: number;
@@ -234,7 +248,13 @@ export interface Change {
   merged?: { base: string; head: string };
 }
 
-export type FindingKind = 'implemented' | 'missing' | 'contradicted' | 'unrequested' | 'supported' | 'untested';
+export type FindingKind =
+  | 'implemented'
+  | 'missing'
+  | 'contradicted'
+  | 'unrequested'
+  | 'supported'
+  | 'untested';
 
 export interface Finding {
   id: Id;

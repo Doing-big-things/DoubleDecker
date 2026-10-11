@@ -4,8 +4,12 @@
   "private": true,
   "type": "module",
   "description": "The local server: HTTP and WebSocket API, static hosting, CLI entry.",
-  "bin": { "decker": "./bin/decker.mjs" },
-  "exports": { ".": "./src/index.ts" },
+  "bin": {
+    "decker": "./bin/decker.mjs"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "dependencies": {
     "@decker/adapter-typescript": "*",
     "@decker/agent-gateway": "*",

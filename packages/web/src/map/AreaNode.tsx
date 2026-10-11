@@ -1,4 +1,4 @@
-import { type DeckIndex, type Id, blocksUnder, fnv1a, testStats } from '@decker/deck-model';
+import { blocksUnder, type DeckIndex, fnv1a, type Id, testStats } from '@decker/deck-model';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { createContext, memo, useContext, useMemo } from 'react';
 import { areaExternals } from '../model/layout';
@@ -21,7 +21,8 @@ export function areaStyle(index: DeckIndex, id: Id): { hue: number; depth: numbe
     const used = new Set<number>();
     const walk = (areaId: Id, hue: number, depth: number) => {
       map!.set(areaId, { hue, depth });
-      for (const kid of index.children.get(areaId) ?? []) if (kid.kind === 'area') walk(kid.id, hue, depth + 1);
+      for (const kid of index.children.get(areaId) ?? [])
+        if (kid.kind === 'area') walk(kid.id, hue, depth + 1);
     };
     for (const area of top) {
       let slot = Number.parseInt(fnv1a(area.name).slice(0, 4), 16) % HUES.length;
@@ -48,7 +49,12 @@ export const AreaNode = memo(function AreaNode({ id, width, height }: NodeProps)
     if (!index) return null;
     const blocks = blocksUnder(index, id);
     const tests = new Set(blocks.flatMap((b) => index.testsOf.get(b.id) ?? []));
-    return { blocks: blocks.length, stats: testStats([...tests], run), externals: areaExternals(index, id), nested: (index.children.get(id) ?? []).some((k) => k.kind === 'area') };
+    return {
+      blocks: blocks.length,
+      stats: testStats([...tests], run),
+      externals: areaExternals(index, id),
+      nested: (index.children.get(id) ?? []).some((k) => k.kind === 'area'),
+    };
   }, [index, id, run]);
 
   const area = index?.byId.get(id);
@@ -64,12 +70,21 @@ export const AreaNode = memo(function AreaNode({ id, width, height }: NodeProps)
   const want = (depth === 0 ? 15 : 11.5) / lower;
   const centerFs = Math.max(11 / lower, Math.min(want, (w * 0.86) / (area.name.length * 0.6 + 1)));
   const centerFits =
-    centered && (depth === 0 ? centerFs * lower >= 10.95 && h * lower >= 20 : centerFs * lower >= 10.5 && w * lower >= Math.max(110, area.name.length * 6.6 + 30) && h * lower >= 56);
+    centered &&
+    (depth === 0
+      ? centerFs * lower >= 10.95 && h * lower >= 20
+      : centerFs * lower >= 10.5 &&
+        w * lower >= Math.max(110, area.name.length * 6.6 + 30) &&
+        h * lower >= 56);
   const meta = `${info.blocks} block${info.blocks === 1 ? '' : 's'}${info.stats.total ? ` · ${info.stats.total} tests` : ''}`;
-  const metaFits = depth === 0 && (meta.length + (info.stats.failed ? 5 : 0)) * centerFs * 0.75 * 0.52 <= w * 0.9 && h * lower >= 44;
+  const metaFits =
+    depth === 0 &&
+    (meta.length + (info.stats.failed ? 5 : 0)) * centerFs * 0.75 * 0.52 <= w * 0.9 &&
+    h * lower >= 44;
 
   return (
     <div
+      role="group"
       className={`dd-area${selected ? ' is-selected' : ''}${dim ? ' dd-dim' : ''}`}
       style={{ '--h': hue } as React.CSSProperties}
       data-depth={Math.min(depth, 1)}
@@ -85,7 +100,13 @@ export const AreaNode = memo(function AreaNode({ id, width, height }: NodeProps)
         if (!box) return;
         const snap = (v: number) => Math.round(v / 8) * 8;
         useDeck.getState().set({
-          popover: { kind: 'block', parentId: id, x: e.clientX, y: e.clientY, position: { x: snap(flow.x - box.ax - 140), y: snap(flow.y - box.ay - 20) } },
+          popover: {
+            kind: 'block',
+            parentId: id,
+            x: e.clientX,
+            y: e.clientY,
+            position: { x: snap(flow.x - box.ax - 140), y: snap(flow.y - box.ay - 20) },
+          },
         });
       }}
     >
@@ -97,7 +118,12 @@ export const AreaNode = memo(function AreaNode({ id, width, height }: NodeProps)
       ) : null}
       {centered ? (
         centerFits ? (
-          <div className="dd-area-center dd-lod" style={{ fontSize: centerFs }} data-top={depth === 0 ? '1' : '0'} data-nested={info.nested ? '1' : '0'}>
+          <div
+            className="dd-area-center dd-lod"
+            style={{ fontSize: centerFs }}
+            data-top={depth === 0 ? '1' : '0'}
+            data-nested={info.nested ? '1' : '0'}
+          >
             <div>
               <b data-testid="area-label">{area.name}</b>
               {metaFits ? (
@@ -151,7 +177,9 @@ export function AreaTitles({ boxes }: { boxes: { id: Id; x: number; y: number; w
             key={box.id}
             type="button"
             className={`dd-area-title nodrag nopan${selectedId === box.id ? ' is-selected' : ''}`}
-            style={{ '--h': hue, left: box.x + 14, top: box.y + 9, maxWidth: box.w - 28 } as React.CSSProperties}
+            style={
+              { '--h': hue, left: box.x + 14, top: box.y + 9, maxWidth: box.w - 28 } as React.CSSProperties
+            }
             data-testid="area-title"
             data-name={area.name}
             onClick={(e) => {

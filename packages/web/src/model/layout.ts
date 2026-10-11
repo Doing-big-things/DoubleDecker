@@ -53,7 +53,12 @@ interface Item {
  * Turn stored positions and current sizes into what is drawn.
  * `height` is a block's current height, `rest` its collapsed height.
  */
-export function computeDisplay(index: DeckIndex, positions: Positions, height: (id: Id) => number, rest: (id: Id) => number): Display {
+export function computeDisplay(
+  index: DeckIndex,
+  positions: Positions,
+  height: (id: Id) => number,
+  rest: (id: Id) => number,
+): Display {
   const display: Display = new Map();
 
   const layout = (parentId: Id, depth: number): { w: number; h: number; bh: number } => {
@@ -117,12 +122,17 @@ export function computeDisplay(index: DeckIndex, positions: Positions, height: (
   return display;
 }
 
-export function boundsOf(display: Display, ids?: Iterable<Id>): { x: number; y: number; width: number; height: number } | null {
+export function boundsOf(
+  display: Display,
+  ids?: Iterable<Id>,
+): { x: number; y: number; width: number; height: number } | null {
   let x0 = Number.POSITIVE_INFINITY;
   let y0 = Number.POSITIVE_INFINITY;
   let x1 = Number.NEGATIVE_INFINITY;
   let y1 = Number.NEGATIVE_INFINITY;
-  const boxes = ids ? [...ids].map((id) => display.get(id)).filter((b): b is Box => Boolean(b)) : [...display.values()].filter((b) => b.depth === 0);
+  const boxes = ids
+    ? [...ids].map((id) => display.get(id)).filter((b): b is Box => Boolean(b))
+    : [...display.values()].filter((b) => b.depth === 0);
   for (const b of boxes) {
     x0 = Math.min(x0, b.ax);
     y0 = Math.min(y0, b.ay);
@@ -162,7 +172,8 @@ function buildElkGraph(index: DeckIndex, rest: (id: Id) => number): ElkNode {
       bucket = new Map();
       edgesAt.set(parent, bucket);
     }
-    if (!bucket.has(key) && !bucket.has(`${b[i]}>${a[i]}`)) bucket.set(key, { id: `e:${parent}:${key}`, sources: [a[i]!], targets: [b[i]!] });
+    if (!bucket.has(key) && !bucket.has(`${b[i]}>${a[i]}`))
+      bucket.set(key, { id: `e:${parent}:${key}`, sources: [a[i]!], targets: [b[i]!] });
   }
 
   const build = (node: DeckNode, depth: number): ElkNode => {
@@ -171,7 +182,9 @@ function buildElkGraph(index: DeckIndex, rest: (id: Id) => number): ElkNode {
     const edges = [...(edgesAt.get(node.id)?.values() ?? [])];
     const isRoot = node.kind === 'system';
     const foot = AREA.bottom + (isRoot ? 0 : areaExternals(index, node.id).length ? AREA.ext : 0);
-    const padding = isRoot ? '[top=0,left=0,bottom=0,right=0]' : `[top=${AREA.top},left=${AREA.side},bottom=${foot},right=${AREA.side}]`;
+    const padding = isRoot
+      ? '[top=0,left=0,bottom=0,right=0]'
+      : `[top=${AREA.top},left=${AREA.side},bottom=${foot},right=${AREA.side}]`;
     const gap = isRoot ? 56 : depth === 1 && kids.some((k) => k.kind === 'area') ? 32 : 24;
     const common = {
       'elk.padding': padding,
@@ -193,13 +206,17 @@ function buildElkGraph(index: DeckIndex, rest: (id: Id) => number): ElkNode {
             'elk.direction': 'DOWN',
             'elk.layered.spacing.nodeNodeBetweenLayers': String(isRoot ? 72 : 44),
             'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
-            'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-            'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
+            'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
             'elk.layered.crossingMinimization.semiInteractive': 'false',
             'elk.separateConnectedComponents': 'true',
             'elk.edgeRouting': 'POLYLINE',
             // A long chain of areas would make a map many screens tall: wrap it into columns.
-            ...(isRoot && kids.length > 10 ? { 'elk.layered.wrapping.strategy': 'MULTI_EDGE', 'elk.layered.wrapping.additionalEdgeSpacing': '48' } : {}),
+            ...(isRoot && kids.length > 10
+              ? {
+                  'elk.layered.wrapping.strategy': 'MULTI_EDGE',
+                  'elk.layered.wrapping.additionalEdgeSpacing': '48',
+                }
+              : {}),
           };
     return { id: node.id, layoutOptions: options, children: kids.map((k) => build(k, depth + 1)), edges };
   };
@@ -276,7 +293,12 @@ export function countMissing(index: DeckIndex, positions: Positions): { missing:
 /**
  * Place only what is new, inside its area and near its callers. Existing positions never move.
  */
-export function placeMissing(index: DeckIndex, positions: Positions, rest: (id: Id) => number, hints: Positions = {}): Positions {
+export function placeMissing(
+  index: DeckIndex,
+  positions: Positions,
+  rest: (id: Id) => number,
+  hints: Positions = {},
+): Positions {
   const next: Positions = { ...positions };
   const visit = (parentId: Id) => {
     const kids = kidsOf(index, parentId);
@@ -293,7 +315,9 @@ export function placeMissing(index: DeckIndex, positions: Positions, rest: (id: 
       next[kid.id] = { x: 1e6, y: 1e6 };
       const display = computeDisplay(index, next, rest, rest);
       const me = display.get(kid.id)!;
-      const others = kids.filter((k) => k.id !== kid.id && next[k.id] && next[k.id]!.x < 1e6).map((k) => display.get(k.id)!);
+      const others = kids
+        .filter((k) => k.id !== kid.id && next[k.id] && next[k.id]!.x < 1e6)
+        .map((k) => display.get(k.id)!);
       const originX = parentId === index.system.id ? 0 : AREA.side;
       const originY = parentId === index.system.id ? 0 : AREA.top;
       const gap = kid.kind === 'area' ? 48 : 24;
@@ -304,7 +328,11 @@ export function placeMissing(index: DeckIndex, positions: Positions, rest: (id: 
           if (near) break;
         }
       }
-      const free = (x: number, y: number) => others.every((o) => x + me.w + gap <= o.x || o.x + o.w + gap <= x || y + me.h + gap <= o.y || o.y + o.h + gap <= y);
+      const free = (x: number, y: number) =>
+        others.every(
+          (o) =>
+            x + me.w + gap <= o.x || o.x + o.w + gap <= x || y + me.h + gap <= o.y || o.y + o.h + gap <= y,
+        );
       const maxX = Math.max(originX, ...others.map((o) => o.x + o.w));
       const maxY = Math.max(originY, ...others.map((o) => o.y + o.h));
       let best: Point | null = null;

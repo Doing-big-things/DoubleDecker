@@ -1,4 +1,4 @@
-import { type DeckIndex, bestBullet, isInternal, operationsOf, shortSignature } from './derive.ts';
+import { bestBullet, type DeckIndex, isInternal, operationsOf, shortSignature } from './derive.ts';
 import type { Bullet, ChangeOp, DeckNode, Id } from './types.ts';
 
 const COL = 44;
@@ -54,10 +54,15 @@ export function renderDeckText(index: DeckIndex, options: DeckTextOptions = {}):
     if (op.type === 'rename') renames.set(op.targetId, op.name);
     else if (op.type === 'remove') removed.add(op.targetId);
     else if (op.type === 'set_behavior') rewrites.set(op.bulletId, { text: op.text, before: op.before });
-    else if (op.type === 'add_behavior') addedBullets.set(op.targetId, [...(addedBullets.get(op.targetId) ?? []), op.text]);
+    else if (op.type === 'add_behavior')
+      addedBullets.set(op.targetId, [...(addedBullets.get(op.targetId) ?? []), op.text]);
   }
   const tag = (id: Id): string =>
-    removed.has(id) ? '  [remove requested]' : renames.has(id) ? `  [rename requested: ${renames.get(id)}]` : '';
+    removed.has(id)
+      ? '  [remove requested]'
+      : renames.has(id)
+        ? `  [rename requested: ${renames.get(id)}]`
+        : '';
 
   const out: string[] = [`# ${index.system.name}`];
 
@@ -85,12 +90,16 @@ export function renderDeckText(index: DeckIndex, options: DeckTextOptions = {}):
     for (const text of addedBullets.get(block.id) ?? []) out.push(row(`▪ ${text}`, '[requested]'));
     if (block.coverage !== 'full') {
       const gaps = index.gapsOf.get(block.id)?.length ?? 0;
-      out.push(`? ${block.coverage}: ${gaps} construct${gaps === 1 ? '' : 's'} the extractor could not follow`);
+      out.push(
+        `? ${block.coverage}: ${gaps} construct${gaps === 1 ? '' : 's'} the extractor could not follow`,
+      );
     }
     for (const l of index.linksOut.get(block.id) ?? []) {
       const kind = l.label ?? 'call';
       const via = l.indirect ? ` (${l.indirect})` : '';
-      out.push(`-> ${name(l.to)}: ${kind}${via}${l.edges.some((e) => removed.has(e.id)) ? '  [remove requested]' : ''}`);
+      out.push(
+        `-> ${name(l.to)}: ${kind}${via}${l.edges.some((e) => removed.has(e.id)) ? '  [remove requested]' : ''}`,
+      );
     }
     for (const ext of index.externalsOf.get(block.id) ?? []) out.push(`-> ${ext.name}: external`);
     for (const l of index.linksIn.get(block.id) ?? []) out.push(`<- ${name(l.from)}: ${l.label ?? 'call'}`);
@@ -98,7 +107,10 @@ export function renderDeckText(index: DeckIndex, options: DeckTextOptions = {}):
       if (op.type !== 'add_edge') continue;
       const from = index.blockOf.get(op.from) ?? op.from;
       const to = index.blockOf.get(op.to) ?? op.to;
-      const kind = op.kind === 'api' ? `API${op.label ? ` ${op.label}` : ''}` : op.kind + (op.label ? ` ${op.label}` : '');
+      const kind =
+        op.kind === 'api'
+          ? `API${op.label ? ` ${op.label}` : ''}`
+          : op.kind + (op.label ? ` ${op.label}` : '');
       if (from === block.id) {
         out.push(row(`-> ${name(to)}: ${kind}`, '[requested]'));
         for (const text of op.bullets) out.push(row(`   ▪ ${text}`, '[requested]'));
@@ -149,7 +161,8 @@ export function describeOp(index: DeckIndex, op: ChangeOp, all: readonly ChangeO
     const node = index.byId.get(id);
     if (node) return node.name;
     const edge = index.edgeById.get(id);
-    if (edge) return `${name(index.blockOf.get(edge.from) ?? edge.from)} → ${name(index.blockOf.get(edge.to) ?? edge.to)}`;
+    if (edge)
+      return `${name(index.blockOf.get(edge.from) ?? edge.from)} → ${name(index.blockOf.get(edge.to) ?? edge.to)}`;
     const link = index.linkById.get(id);
     if (link) return `${name(link.from)} → ${name(link.to)}`;
     return id;

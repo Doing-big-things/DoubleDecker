@@ -23,6 +23,8 @@ export class OrderStore {
   }
 
   byCustomer(customer: CustomerId): Order[] {
-    return [...this.orders.values()].filter((o) => o.customer === customer).sort((a, b) => b.id.localeCompare(a.id));
+    return [...this.orders.values()]
+      .filter((o) => o.customer === customer)
+      .sort((a, b) => b.id.localeCompare(a.id));
   }
 }

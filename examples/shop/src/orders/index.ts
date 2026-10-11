@@ -27,7 +27,14 @@ export class Orders {
     const id = nextId('ord');
     const total = totalOf(cart, this.deps.catalog);
     const payment = this.deps.payments.charge(customer, total, id);
-    const order: Order = { id, customer, items: cart.items, total, paymentId: payment.id, status: 'confirmed' };
+    const order: Order = {
+      id,
+      customer,
+      items: cart.items,
+      total,
+      paymentId: payment.id,
+      status: 'confirmed',
+    };
     this.deps.store.save(order);
     return order;
   }

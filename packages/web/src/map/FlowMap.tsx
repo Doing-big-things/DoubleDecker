@@ -2,6 +2,7 @@
 // through the store and the camera, so the renderer can be replaced (spec §8.2).
 import type { DeckIndex, Id } from '@decker/deck-model';
 import {
+  applyNodeChanges,
   Background,
   BackgroundVariant,
   ConnectionLineType,
@@ -14,21 +15,20 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
-  ViewportPortal,
-  applyNodeChanges,
   useConnection,
   useReactFlow,
+  ViewportPortal,
 } from '@xyflow/react';
 import { Maximize2, Minus, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AREA, type Box, type Display, computeDisplay } from '../model/layout';
+import { AREA, type Box, computeDisplay, type Display } from '../model/layout';
 import { BLOCK_W, blockHeight, collapsedHeight } from '../model/measure';
 import { currentRun, useDeck, useLevel } from '../state/store';
-import { AreaNode, AreaTitles, ChipContext, areaStyle } from './AreaNode';
+import { AreaNode, AreaTitles, areaStyle, ChipContext } from './AreaNode';
 import { BlockNode } from './BlockNode';
-import { LinkEdge } from './LinkEdge';
-import { BANDS, MAX_ZOOM, MIN_ZOOM, bandFor, bandVars, camera, levelOf } from './camera';
+import { BANDS, bandFor, bandVars, camera, levelOf, MAX_ZOOM, MIN_ZOOM } from './camera';
 import { type Side, sideOf, slot } from './geometry';
+import { LinkEdge } from './LinkEdge';
 
 const nodeTypes = { area: AreaNode, block: BlockNode };
 const edgeTypes = { link: LinkEdge };
@@ -107,7 +107,8 @@ function Canvas() {
     const rest = restHeights(index);
     const st = { expanded, internals, testsOpen: (id: Id) => allTests !== testsToggled.has(id), run };
     const grown = expanded.size > 0 || allTests || testsToggled.size > 0;
-    const height = (id: Id) => (grown && (expanded.has(id) || st.testsOpen(id)) ? blockHeight(index, id, st) : (rest.get(id) ?? 100));
+    const height = (id: Id) =>
+      grown && (expanded.has(id) || st.testsOpen(id)) ? blockHeight(index, id, st) : (rest.get(id) ?? 100);
     return computeDisplay(index, positions, height, (id) => rest.get(id) ?? 100);
   }, [index, positions, expanded, internals, testsToggled, allTests, run]);
 
@@ -123,7 +124,13 @@ function Canvas() {
     const out: Node[] = [];
     const push = (box: Box) => {
       const old = cache.get(box.id);
-      const same = old && old.position.x === box.x && old.position.y === box.y && old.width === box.w && old.height === box.h && old.parentId === (box.parent ?? undefined);
+      const same =
+        old &&
+        old.position.x === box.x &&
+        old.position.y === box.y &&
+        old.width === box.w &&
+        old.height === box.h &&
+        old.parentId === (box.parent ?? undefined);
       const node = same ? old : makeNode(box, box.x, box.y, box.w, box.h);
       next.set(box.id, node);
       out.push(node);
@@ -151,7 +158,15 @@ function Canvas() {
     const moving = new Set<Id>();
     for (const t of target) {
       const f = from.get(t.id);
-      if (f && f.parentId === t.parentId && (f.position.x !== t.position.x || f.position.y !== t.position.y || f.width !== t.width || f.height !== t.height)) moving.add(t.id);
+      if (
+        f &&
+        f.parentId === t.parentId &&
+        (f.position.x !== t.position.x ||
+          f.position.y !== t.position.y ||
+          f.width !== t.width ||
+          f.height !== t.height)
+      )
+        moving.add(t.id);
     }
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (moving.size === 0 || reduced || target.length > 700 || live.current.length === 0) {
@@ -173,7 +188,13 @@ function Canvas() {
           if (!f || !moving.has(n.id)) return n;
           const w = mix(f.width ?? n.width!, n.width!);
           const h = mix(f.height ?? n.height!, n.height!);
-          return { ...n, position: { x: mix(f.position.x, n.position.x), y: mix(f.position.y, n.position.y) }, width: w, height: h, handles: handlesFor(w, h, n.type === 'block') };
+          return {
+            ...n,
+            position: { x: mix(f.position.x, n.position.x), y: mix(f.position.y, n.position.y) },
+            width: w,
+            height: h,
+            handles: handlesFor(w, h, n.type === 'block'),
+          };
         }),
       );
       frame.current = requestAnimationFrame(step);
@@ -207,12 +228,22 @@ function Canvas() {
       };
       add(sk, vertical ? rb.x + rb.w / 2 : rb.y + rb.h / 2);
       add(tk, vertical ? ra.x + ra.w / 2 : ra.y + ra.h / 2);
-      picked.push({ id: link.id, from: link.from, to: link.to, sk, tk, src: vertical ? ra.x + ra.w / 2 : ra.y + ra.h / 2, tgt: vertical ? rb.x + rb.w / 2 : rb.y + rb.h / 2 });
+      picked.push({
+        id: link.id,
+        from: link.from,
+        to: link.to,
+        sk,
+        tk,
+        src: vertical ? ra.x + ra.w / 2 : ra.y + ra.h / 2,
+        tgt: vertical ? rb.x + rb.w / 2 : rb.y + rb.h / 2,
+      });
     }
     const fraction = new Map<string, number>();
     for (const [key, list] of sides) {
       list.sort((p, q) => p.other - q.other);
-      list.forEach((end, i) => fraction.set(`${key}|${end.key}`, slot(i, list.length)));
+      list.forEach((end, i) => {
+        fraction.set(`${key}|${end.key}`, slot(i, list.length));
+      });
     }
     // Label order: among arrows arriving on one side from the same direction, the one that
     // attaches nearest the far edge gets the label closest to the block.
@@ -226,8 +257,14 @@ function Canvas() {
     }
     for (const [key, list] of arrivals) {
       const fromLow = key.endsWith(':a');
-      list.sort((p, q) => ((fraction.get(`${p.tk}|${p.id}`) ?? 0.5) - (fraction.get(`${q.tk}|${q.id}`) ?? 0.5)) * (fromLow ? -1 : 1));
-      list.forEach((p, i) => rank.set(p.id, i));
+      list.sort(
+        (p, q) =>
+          ((fraction.get(`${p.tk}|${p.id}`) ?? 0.5) - (fraction.get(`${q.tk}|${q.id}`) ?? 0.5)) *
+          (fromLow ? -1 : 1),
+      );
+      list.forEach((p, i) => {
+        rank.set(p.id, i);
+      });
     }
     return picked.map<Edge>((p) => ({
       id: p.id,
@@ -238,7 +275,11 @@ function Canvas() {
       type: 'link',
       selectable: false,
       focusable: false,
-      data: { s: fraction.get(`${p.sk}|${p.id}`) ?? 0.5, t: fraction.get(`${p.tk}|${p.id}`) ?? 0.5, r: rank.get(p.id) ?? 0 },
+      data: {
+        s: fraction.get(`${p.sk}|${p.id}`) ?? 0.5,
+        t: fraction.get(`${p.tk}|${p.id}`) ?? 0.5,
+        r: rank.get(p.id) ?? 0,
+      },
     }));
   }, [index, display, level]);
 
@@ -248,7 +289,9 @@ function Canvas() {
     if (level !== 'system' || !index) return out;
     for (const box of display.values()) {
       if (box.kind !== 'block' || !box.parent) continue;
-      const failing = run ? (index.testsOf.get(box.id) ?? []).some((t) => run.results[t.id] === 'failed') : false;
+      const failing = run
+        ? (index.testsOf.get(box.id) ?? []).some((t) => run.results[t.id] === 'failed')
+        : false;
       const entry = out.get(box.parent) ?? { ok: '', fail: '' };
       const d = roundRect(box.x, box.y, box.w, box.h, 12);
       if (failing) entry.fail += d;
@@ -261,7 +304,8 @@ function Canvas() {
   const titles = useMemo(() => {
     if (level === 'system') return [];
     const out: { id: Id; x: number; y: number; w: number }[] = [];
-    for (const box of display.values()) if (box.kind === 'area') out.push({ id: box.id, x: box.ax, y: box.ay, w: box.w });
+    for (const box of display.values())
+      if (box.kind === 'area') out.push({ id: box.id, x: box.ax, y: box.ay, w: box.w });
     return out;
   }, [display, level]);
 
@@ -297,7 +341,10 @@ function Canvas() {
     return () => el.removeEventListener('wheel', onWheel, { capture: true });
   }, []);
 
-  const onNodesChange = useCallback((changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes, ns)), []);
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes, ns)),
+    [],
+  );
 
   const onConnectEnd: OnConnectEnd = useCallback((event, state) => {
     const from = state.fromNode?.id;
@@ -318,7 +365,15 @@ function Canvas() {
   );
 
   return (
-    <div className="dd-flow" ref={wrap} data-level={level} data-band={band} data-connecting={connecting ? '1' : '0'} data-testid="canvas" style={{ width: '100%', height: '100%' }}>
+    <div
+      className="dd-flow"
+      ref={wrap}
+      data-level={level}
+      data-band={band}
+      data-connecting={connecting ? '1' : '0'}
+      data-testid="canvas"
+      style={{ width: '100%', height: '100%' }}
+    >
       <ChipContext.Provider value={chips}>
         <ReactFlow
           nodes={nodes}
@@ -357,7 +412,8 @@ function Canvas() {
             else st.select(node.id);
           }}
           onNodeDoubleClick={(_, node) => {
-            if (node.type === 'block' || level === 'system') useDeck.getState().select(node.id, { fly: true });
+            if (node.type === 'block' || level === 'system')
+              useDeck.getState().select(node.id, { fly: true });
           }}
           onEdgeClick={(_, edge) => useDeck.getState().select(edge.id)}
           onPaneClick={() => useDeck.getState().select(null)}
@@ -389,18 +445,46 @@ function Canvas() {
             <AreaTitles boxes={titles} />
           </ViewportPortal>
           <Background variant={BackgroundVariant.Dots} gap={24} size={1.4} color="var(--grid)" />
-          <MiniMap pannable zoomable nodeColor={minimapColor} nodeStrokeWidth={0} nodeBorderRadius={6} maskColor="var(--scrim)" bgColor="var(--chrome)" style={{ width: 188, height: 124 }} />
+          <MiniMap
+            pannable
+            zoomable
+            nodeColor={minimapColor}
+            nodeStrokeWidth={0}
+            nodeBorderRadius={6}
+            maskColor="var(--scrim)"
+            bgColor="var(--chrome)"
+            style={{ width: 188, height: 124 }}
+          />
         </ReactFlow>
       </ChipContext.Provider>
 
       <div className="dd-controls">
-        <button type="button" className="dd-icon-btn" aria-label="Zoom out" title="Zoom out  (−)" onClick={() => camera.zoomBy(1 / 1.3)}>
+        <button
+          type="button"
+          className="dd-icon-btn"
+          aria-label="Zoom out"
+          title="Zoom out  (−)"
+          onClick={() => camera.zoomBy(1 / 1.3)}
+        >
           <Minus size={15} />
         </button>
-        <button type="button" className="dd-icon-btn" aria-label="Zoom in" title="Zoom in  (+)" onClick={() => camera.zoomBy(1.3)}>
+        <button
+          type="button"
+          className="dd-icon-btn"
+          aria-label="Zoom in"
+          title="Zoom in  (+)"
+          onClick={() => camera.zoomBy(1.3)}
+        >
           <Plus size={15} />
         </button>
-        <button type="button" className="dd-icon-btn" aria-label="Fit everything" title="Fit everything  (0)" data-testid="fit" onClick={() => camera.fit()}>
+        <button
+          type="button"
+          className="dd-icon-btn"
+          aria-label="Fit everything"
+          title="Fit everything  (0)"
+          data-testid="fit"
+          onClick={() => camera.fit()}
+        >
           <Maximize2 size={14} />
         </button>
         <span className="dd-sep" />
@@ -408,8 +492,16 @@ function Canvas() {
           <b>{LEVEL_NAME[level]}</b> · {zoomPct}%
         </span>
       </div>
-      {laying || status === 'loading' ? <div className="dd-loading">{status === 'loading' ? 'Loading the deck…' : 'Arranging the map…'}</div> : null}
-      <span hidden data-testid="zoom" data-zoom={rf ? zoomPct : 0} data-min={BANDS[0]} data-level-of={levelOf(band)} />
+      {laying || status === 'loading' ? (
+        <div className="dd-loading">{status === 'loading' ? 'Loading the deck…' : 'Arranging the map…'}</div>
+      ) : null}
+      <span
+        hidden
+        data-testid="zoom"
+        data-zoom={rf ? zoomPct : 0}
+        data-min={BANDS[0]}
+        data-level-of={levelOf(band)}
+      />
     </div>
   );
 }

@@ -1,8 +1,8 @@
 // The .deck folder (spec §4.3): human-readable, diffable, committed with the code.
 // Only cache/ is ignored. Writes are atomic: write a temporary file, then rename.
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { type IdsFile, emptyIds } from '@decker/adapter-typescript';
+import { emptyIds, type IdsFile } from '@decker/adapter-typescript';
 import type { SummarizerConfig } from '@decker/agent-gateway';
 import type { Change, DeckLayout, DeckNotes, Id } from '@decker/deck-model';
 
@@ -73,13 +73,22 @@ export class DeckDir {
 
   settings(): DeckSettings {
     const stored = this.read<Partial<DeckSettings>>('deck.json', {});
-    return { adapter: 'typescript', editor: 'code --goto {path}:{line}', image: 'node:24-slim', ...stored, checks: stored.checks ?? this.defaultChecks() };
+    return {
+      adapter: 'typescript',
+      editor: 'code --goto {path}:{line}',
+      image: 'node:24-slim',
+      ...stored,
+      checks: stored.checks ?? this.defaultChecks(),
+    };
   }
 
   /** With no deck.json, infer the checks from what the project already uses. */
   private defaultChecks(): CheckSpec[] {
     try {
-      const pkg = JSON.parse(readFileSync(path.join(this.root, 'package.json'), 'utf8')) as { devDependencies?: Record<string, string>; dependencies?: Record<string, string> };
+      const pkg = JSON.parse(readFileSync(path.join(this.root, 'package.json'), 'utf8')) as {
+        devDependencies?: Record<string, string>;
+        dependencies?: Record<string, string>;
+      };
       const deps = { ...pkg.dependencies, ...pkg.devDependencies };
       const checks: CheckSpec[] = [];
       if (deps.typescript) checks.push({ name: 'typecheck', command: 'npx tsc --noEmit', kind: 'command' });
@@ -101,7 +110,11 @@ export class DeckDir {
     return this.read<DeckLayout | null>('layout.json', null);
   }
   writeLayout(layout: DeckLayout): void {
-    this.write('layout.json', { version: 1, positions: sortKeys(layout.positions), pinned: [...layout.pinned].sort() });
+    this.write('layout.json', {
+      version: 1,
+      positions: sortKeys(layout.positions),
+      pinned: [...layout.pinned].sort(),
+    });
   }
 
   notes(): DeckNotes {

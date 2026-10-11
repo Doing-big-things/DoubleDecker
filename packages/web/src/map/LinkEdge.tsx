@@ -20,7 +20,14 @@ export function linkOf(index: DeckIndex, id: string): Link | undefined {
   return map.get(id);
 }
 
-const RANK: Record<string, number> = { contradicted: 0, unrequested: 1, missing: 2, implemented: 4, supported: 5, untested: 6 };
+const RANK: Record<string, number> = {
+  contradicted: 0,
+  unrequested: 1,
+  missing: 2,
+  implemented: 4,
+  supported: 5,
+  untested: 6,
+};
 
 /** The state an arrow is drawn in: a review finding first, then a pending request. */
 export function linkState(s: Pick<DeckState, 'marks' | 'findings'>, link: Link): string | undefined {
@@ -54,7 +61,13 @@ export const LinkEdge = memo(function LinkEdge({ id, source, target, data }: Edg
   const dim = useDeck((s) => s.lit !== null && !s.lit.has(id));
   const state = useDeck((s) => (link ? linkState(s, link) : undefined));
   const pending = useDeck((s) => (link ? pendingInLink(link, s.marks) : 0));
-  const unchanged = useDeck((s) => s.changedIds !== null && link !== undefined && !s.changedIds.has(id) && !link.edges.some((e) => s.changedIds!.has(e.id)));
+  const unchanged = useDeck(
+    (s) =>
+      s.changedIds !== null &&
+      link !== undefined &&
+      !s.changedIds.has(id) &&
+      !link.edges.some((e) => s.changedIds!.has(e.id)),
+  );
 
   if (!a || !b || !link) return null;
   const scale = Math.max(1, 0.9 / BANDS[band]!);
@@ -65,15 +78,33 @@ export const LinkEdge = memo(function LinkEdge({ id, source, target, data }: Edg
   const allIndirect = link.edges.every((e) => e.indirect);
   const label = link.label ?? (allIndirect ? link.indirect : undefined);
   const showPill =
-    level === 'system' || selected || lit || Boolean(state) || pending > 0 || (level === 'blocks' && Boolean(label)) || (level === 'blocks' && near && link.count > 1);
+    level === 'system' ||
+    selected ||
+    lit ||
+    Boolean(state) ||
+    pending > 0 ||
+    (level === 'blocks' && Boolean(label)) ||
+    (level === 'blocks' && near && link.count > 1);
 
-  const cls = ['dd-edge', selected ? 'is-selected' : '', lit || near ? 'is-lit' : '', dim ? 'dd-dim' : '', unchanged ? 'dd-unchanged' : ''].join(' ');
+  const cls = [
+    'dd-edge',
+    selected ? 'is-selected' : '',
+    lit || near ? 'is-lit' : '',
+    dim ? 'dd-dim' : '',
+    unchanged ? 'dd-unchanged' : '',
+  ].join(' ');
   return (
     <>
       <g className={cls} data-s={state} data-testid="arrow" data-id={id} data-from={source} data-to={target}>
         <path className="dd-edge-line" d={geo.d} style={{ strokeWidth: width, strokeDasharray: dash }} />
         <path className="dd-edge-head" d={geo.head} />
-        <path d={geo.d} fill="none" stroke="transparent" strokeWidth={Math.max(16, 14 * scale)} className="react-flow__edge-interaction" />
+        <path
+          d={geo.d}
+          fill="none"
+          stroke="transparent"
+          strokeWidth={Math.max(16, 14 * scale)}
+          className="react-flow__edge-interaction"
+        />
       </g>
       {showPill ? (
         <EdgeLabelRenderer>
@@ -89,10 +120,22 @@ export const LinkEdge = memo(function LinkEdge({ id, source, target, data }: Edg
             onMouseEnter={() => useDeck.getState().hover(id)}
             onMouseLeave={() => useDeck.getState().hover(null)}
           >
-            {label ? <span>{label}</span> : level !== 'system' && !state && link.count === 1 ? <span>call</span> : null}
-            {link.count > 1 || level === 'system' ? <span className="dd-edge-count">{level === 'system' && !label ? link.count : `×${link.count}`}</span> : null}
+            {label ? (
+              <span>{label}</span>
+            ) : level !== 'system' && !state && link.count === 1 ? (
+              <span>call</span>
+            ) : null}
+            {link.count > 1 || level === 'system' ? (
+              <span className="dd-edge-count">
+                {level === 'system' && !label ? link.count : `×${link.count}`}
+              </span>
+            ) : null}
             <StateBadge state={state} />
-            {pending > 0 ? <span className="dd-badge" data-s="requested">+{pending} requested</span> : null}
+            {pending > 0 ? (
+              <span className="dd-badge" data-s="requested">
+                +{pending} requested
+              </span>
+            ) : null}
           </button>
         </EdgeLabelRenderer>
       ) : null}

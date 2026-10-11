@@ -1,6 +1,14 @@
 // Where the deck comes from. The same UI runs against a fixture with no server (M0)
 // and against the local decker server.
-import type { Change, DeckBundle, DeckLayout, DeckNotes, Id, ReviewBundle, ServerEvent } from '@decker/deck-model';
+import type {
+  Change,
+  DeckBundle,
+  DeckLayout,
+  DeckNotes,
+  Id,
+  ReviewBundle,
+  ServerEvent,
+} from '@decker/deck-model';
 
 export type Transition = 'submit' | 'approve' | 'revise' | 'accept' | 'reject' | 'retry' | 'revert';
 
@@ -92,7 +100,10 @@ class FixtureSource implements DeckSource {
   }
 
   async discardChange(id: Id): Promise<void> {
-    store.set(this.key('changes'), (store.get<Change[]>(this.key('changes')) ?? []).filter((c) => c.id !== id));
+    store.set(
+      this.key('changes'),
+      (store.get<Change[]>(this.key('changes')) ?? []).filter((c) => c.id !== id),
+    );
   }
 
   async patchPlan(): Promise<Change> {
@@ -130,7 +141,10 @@ class ServerSource implements DeckSource {
   private async api<T>(path: string, init: RequestInit = {}): Promise<T> {
     const res = await fetch(path, {
       ...init,
-      headers: { authorization: `Bearer ${this.token}`, ...(init.body ? { 'content-type': 'application/json' } : {}) },
+      headers: {
+        authorization: `Bearer ${this.token}`,
+        ...(init.body ? { 'content-type': 'application/json' } : {}),
+      },
     });
     if (!res.ok) {
       let message = `${res.status} ${res.statusText}`;
@@ -192,7 +206,10 @@ class ServerSource implements DeckSource {
   }
 
   transition(id: Id, action: Transition, body?: unknown): Promise<Change> {
-    return this.api<Change>(`/api/changes/${id}/${action}`, { method: 'POST', body: JSON.stringify(body ?? {}) });
+    return this.api<Change>(`/api/changes/${id}/${action}`, {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+    });
   }
 
   review(id: Id): Promise<ReviewBundle> {

@@ -9,18 +9,36 @@ const lines = (text: string) =>
     .map((l) => l.replace(/^\s*[-•▪*]\s*/, '').trim())
     .filter(Boolean);
 
-function Frame({ x, y, children, onSubmit, testId }: { x: number; y: number; children: React.ReactNode; onSubmit: () => void; testId: string }) {
+function Frame({
+  x,
+  y,
+  children,
+  onSubmit,
+  testId,
+}: {
+  x: number;
+  y: number;
+  children: React.ReactNode;
+  onSubmit: () => void;
+  testId: string;
+}) {
   const ref = useRef<HTMLFormElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setPos({ left: Math.max(8, Math.min(x, window.innerWidth - r.width - 8)), top: Math.max(52, Math.min(y, window.innerHeight - r.height - 8)) });
+    setPos({
+      left: Math.max(8, Math.min(x, window.innerWidth - r.width - 8)),
+      top: Math.max(52, Math.min(y, window.innerHeight - r.height - 8)),
+    });
   }, [x, y]);
   return (
     <>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 39 }} onClick={() => useDeck.getState().set({ popover: null })} />
+      <div
+        style={{ position: 'fixed', inset: 0, zIndex: 39 }}
+        onClick={() => useDeck.getState().set({ popover: null })}
+      />
       <form
         ref={ref}
         className="dd-popover"
@@ -50,7 +68,15 @@ function EdgeForm({ from, to, x, y }: { from: string; to: string; x: number; y: 
   const [bullets, setBullets] = useState('');
   const st = useDeck.getState;
   const submit = () => {
-    st().addOp({ id: freshId('op'), type: 'add_edge', from, to, kind, label: label.trim() || undefined, bullets: lines(bullets) });
+    st().addOp({
+      id: freshId('op'),
+      type: 'add_edge',
+      from,
+      to,
+      kind,
+      label: label.trim() || undefined,
+      bullets: lines(bullets),
+    });
     st().set({ popover: null });
   };
   return (
@@ -61,16 +87,37 @@ function EdgeForm({ from, to, x, y }: { from: string; to: string; x: number; y: 
       <label htmlFor="dd-edge-kind">Kind</label>
       <div className="dd-seg" id="dd-edge-kind">
         {(['api', 'call', 'event'] as const).map((k) => (
-          <button type="button" key={k} aria-pressed={kind === k} onClick={() => setKind(k)} data-testid={`kind-${k}`}>
+          <button
+            type="button"
+            key={k}
+            aria-pressed={kind === k}
+            onClick={() => setKind(k)}
+            data-testid={`kind-${k}`}
+          >
             {k === 'api' ? 'API' : k === 'call' ? 'Call' : 'Event'}
           </button>
         ))}
       </div>
       <label htmlFor="dd-edge-label">Label</label>
-      {/* biome-ignore lint/a11y/noAutofocus: the form opens in response to drawing the arrow */}
-      <input id="dd-edge-label" className="dd-input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Reserve stock" autoFocus data-testid="edge-label" />
+      <input
+        id="dd-edge-label"
+        className="dd-input"
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        placeholder="Reserve stock"
+        autoFocus
+        data-testid="edge-label"
+      />
       <label htmlFor="dd-edge-bullets">Behavior, one per line</label>
-      <textarea id="dd-edge-bullets" className="dd-input" rows={4} value={bullets} onChange={(e) => setBullets(e.target.value)} placeholder={'Reserve every item before confirming an order\nNever reserve only part of an order'} data-testid="edge-bullets" />
+      <textarea
+        id="dd-edge-bullets"
+        className="dd-input"
+        rows={4}
+        value={bullets}
+        onChange={(e) => setBullets(e.target.value)}
+        placeholder={'Reserve every item before confirming an order\nNever reserve only part of an order'}
+        data-testid="edge-bullets"
+      />
       <div className="dd-popover-foot">
         <button type="button" className="dd-btn is-ghost" onClick={() => st().set({ popover: null })}>
           Cancel
@@ -83,7 +130,17 @@ function EdgeForm({ from, to, x, y }: { from: string; to: string; x: number; y: 
   );
 }
 
-function BlockForm({ parentId, x, y, position }: { parentId: string; x: number; y: number; position?: { x: number; y: number } }) {
+function BlockForm({
+  parentId,
+  x,
+  y,
+  position,
+}: {
+  parentId: string;
+  x: number;
+  y: number;
+  position?: { x: number; y: number };
+}) {
   const index = useDeck((s) => s.index);
   const [name, setName] = useState('');
   const [bullets, setBullets] = useState('');
@@ -99,15 +156,35 @@ function BlockForm({ parentId, x, y, position }: { parentId: string; x: number; 
     <Frame x={x} y={y} onSubmit={submit} testId="block-form">
       <h4>New block in {index?.byId.get(parentId)?.name}</h4>
       <label htmlFor="dd-block-name">Name</label>
-      {/* biome-ignore lint/a11y/noAutofocus: the form opens in response to N or a double-click */}
-      <input id="dd-block-name" className="dd-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Notifications" autoFocus data-testid="block-name" />
+      <input
+        id="dd-block-name"
+        className="dd-input"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Notifications"
+        autoFocus
+        data-testid="block-name"
+      />
       <label htmlFor="dd-block-bullets">Behavior, one per line</label>
-      <textarea id="dd-block-bullets" className="dd-input" rows={4} value={bullets} onChange={(e) => setBullets(e.target.value)} placeholder={'Email a receipt when an order is placed'} data-testid="block-bullets" />
+      <textarea
+        id="dd-block-bullets"
+        className="dd-input"
+        rows={4}
+        value={bullets}
+        onChange={(e) => setBullets(e.target.value)}
+        placeholder={'Email a receipt when an order is placed'}
+        data-testid="block-bullets"
+      />
       <div className="dd-popover-foot">
         <button type="button" className="dd-btn is-ghost" onClick={() => st().set({ popover: null })}>
           Cancel
         </button>
-        <button type="submit" className="dd-btn is-primary" disabled={!name.trim()} data-testid="block-submit">
+        <button
+          type="submit"
+          className="dd-btn is-primary"
+          disabled={!name.trim()}
+          data-testid="block-submit"
+        >
           Request block
         </button>
       </div>
@@ -126,8 +203,14 @@ function RenameForm({ targetId, x, y }: { targetId: string; x: number; y: number
   return (
     <Frame x={x} y={y} onSubmit={submit} testId="rename-form">
       <h4>Rename {node?.kind}</h4>
-      {/* biome-ignore lint/a11y/noAutofocus: opened by F2 */}
-      <input className="dd-input" value={name} onChange={(e) => setName(e.target.value)} autoFocus onFocus={(e) => e.currentTarget.select()} data-testid="rename-input" />
+      <input
+        className="dd-input"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        autoFocus
+        onFocus={(e) => e.currentTarget.select()}
+        data-testid="rename-input"
+      />
       <div className="dd-popover-foot">
         <button type="button" className="dd-btn is-ghost" onClick={() => st().set({ popover: null })}>
           Cancel

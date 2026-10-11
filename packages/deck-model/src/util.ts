@@ -35,7 +35,28 @@ export function freshId(kind: string): string {
   return `${PREFIX[kind] ?? kind}_${fnv1a(`${Date.now()}:${counter}:${rand}`)}`;
 }
 
-const ACRONYMS = new Set(['api', 'http', 'https', 'url', 'uri', 'id', 'json', 'jwt', 'sql', 'html', 'css', 'ui', 'sse', 'jsx', 'ws', 'cors', 'csrf', 'etag', 'ip', 'db']);
+const ACRONYMS = new Set([
+  'api',
+  'http',
+  'https',
+  'url',
+  'uri',
+  'id',
+  'json',
+  'jwt',
+  'sql',
+  'html',
+  'css',
+  'ui',
+  'sse',
+  'jsx',
+  'ws',
+  'cors',
+  'csrf',
+  'etag',
+  'ip',
+  'db',
+]);
 
 /** Split an identifier into lower-case words: reserveStock -> ["reserve", "stock"]. */
 export function splitIdentifier(name: string): string[] {

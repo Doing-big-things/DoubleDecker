@@ -1,6 +1,6 @@
 // The outline view (spec §3.12): the same areas, blocks, bullets and arrows as a searchable
 // tree. It is the textual equivalent of the map and the format agents receive.
-import { type DeckIndex, type DeckNode, type Id, cardBullets, renderDeckText } from '@decker/deck-model';
+import { cardBullets, type DeckIndex, type DeckNode, type Id, renderDeckText } from '@decker/deck-model';
 import { ClipboardCopy, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Caret, Mark } from '../map/BlockNode';
@@ -9,8 +9,14 @@ import { useDeck } from '../state/store';
 function matches(index: DeckIndex, node: DeckNode, q: string): boolean {
   if (!q) return true;
   if (node.name.toLowerCase().includes(q)) return true;
-  if (node.kind === 'block') return cardBullets(index, node.id).some((b) => b.bullet.text.toLowerCase().includes(q)) || (node.summary?.text.toLowerCase().includes(q) ?? false);
-  return (index.children.get(node.id) ?? []).some((c) => (c.kind === 'area' || c.kind === 'block') && matches(index, c, q));
+  if (node.kind === 'block')
+    return (
+      cardBullets(index, node.id).some((b) => b.bullet.text.toLowerCase().includes(q)) ||
+      (node.summary?.text.toLowerCase().includes(q) ?? false)
+    );
+  return (index.children.get(node.id) ?? []).some(
+    (c) => (c.kind === 'area' || c.kind === 'block') && matches(index, c, q),
+  );
 }
 
 export function Outline() {
@@ -41,7 +47,13 @@ export function Outline() {
     const isOpen = q ? true : expanded.has(node.id);
     const pad = { paddingLeft: 6 + depth * 14 };
     return (
-      <div key={node.id} role="treeitem" aria-expanded={isOpen} aria-selected={selectedId === node.id}>
+      <div
+        key={node.id}
+        role="treeitem"
+        tabIndex={-1}
+        aria-expanded={isOpen}
+        aria-selected={selectedId === node.id}
+      >
         <button
           type="button"
           className={`dd-tree-row${selectedId === node.id ? ' is-selected' : ''}`}
@@ -64,7 +76,9 @@ export function Outline() {
           </span>
           <span className="t">{node.name}</span>
         </button>
-        {isOpen && node.kind === 'area' ? (index.children.get(node.id) ?? []).map((c) => renderNode(c, depth + 1)) : null}
+        {isOpen && node.kind === 'area'
+          ? (index.children.get(node.id) ?? []).map((c) => renderNode(c, depth + 1))
+          : null}
         {isOpen && node.kind === 'block' ? (
           <>
             {cardBullets(index, node.id).map((b) => (
@@ -82,7 +96,14 @@ export function Outline() {
               </button>
             ))}
             {(index.linksOut.get(node.id) ?? []).map((l) => (
-              <button type="button" className="dd-tree-row" data-kind="arrow" key={l.id} style={{ paddingLeft: 26 + depth * 14 }} onClick={() => st().select(l.to, { fly: true })}>
+              <button
+                type="button"
+                className="dd-tree-row"
+                data-kind="arrow"
+                key={l.id}
+                style={{ paddingLeft: 26 + depth * 14 }}
+                onClick={() => st().select(l.to, { fly: true })}
+              >
                 <span className="t">
                   → {index.byId.get(l.to)?.name}
                   {l.label ? ` · ${l.label}` : ''}
@@ -98,7 +119,13 @@ export function Outline() {
   return (
     <aside className="dd-outline" data-testid="outline" aria-label="Outline">
       <div className="dd-outline-head">
-        <input className="dd-input" placeholder="Filter the outline…" value={query} onChange={(e) => setQuery(e.target.value)} data-testid="outline-filter" />
+        <input
+          className="dd-input"
+          placeholder="Filter the outline…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          data-testid="outline-filter"
+        />
         <button
           type="button"
           className="dd-icon-btn"
@@ -114,7 +141,12 @@ export function Outline() {
         >
           <ClipboardCopy size={15} />
         </button>
-        <button type="button" className="dd-icon-btn" aria-label="Close outline" onClick={() => st().set({ outlineOpen: false })}>
+        <button
+          type="button"
+          className="dd-icon-btn"
+          aria-label="Close outline"
+          onClick={() => st().set({ outlineOpen: false })}
+        >
           <X size={15} />
         </button>
       </div>

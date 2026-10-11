@@ -1,10 +1,73 @@
 # Double Decker
 
-**Design specification v0.2 · 2026-10-11 · Dallas**  
+**Design specification v0.3 · 2026-10-11 · Dallas**  
 **Concept owner: Jay Reed**  
-**Status: Stack decided. Ready to build milestone M0.**
+**Status: Proof of concept built through M4, verified end to end in host-sandbox mode. The container sandbox and the Claude worker are written and not yet run. See "Build status" below.**
 
-Supersedes v0.1, archived unchanged as `double_decker_spec_v0.1.md`. Appendix B lists what changed.
+Supersedes v0.1, archived unchanged as `double_decker_original_idea_deprecated.md`. Appendix B lists what changed from v0.1 to v0.2. The "Build status" section lists what changed while building.
+
+## Build status
+
+Built on 2026-10-11, straight through from M0 at Jay's instruction, without the M0 sign-off pause. The look and feel is therefore still open to his review, and nothing below depends on it staying as it is.
+
+| Milestone | State | Verified by |
+|---|---|---|
+| **M0** The canvas | Built | `e2e/canvas.spec.ts`, 13 tests |
+| **M1** Compile up | Built | `e2e/compile-up.spec.ts`, 6 tests, plus Hono and Supabase Storage runs recorded in `fixtures/repos.json` |
+| **M2** Edit the deck | Built | The editing test in `e2e/canvas.spec.ts` |
+| **M3** The agent loop | Built. Verified with stored candidates in host-sandbox mode only | `e2e/change-loop.spec.ts`, 6 tests |
+| **M4** Trust | Partly built | Same suite. See the gaps below |
+| **M5** Prove and extend | Not started | |
+
+**Not verified.** These are written and have never run:
+
+- **The container sandbox** (§6.3). The development machine has no Docker or Podman. Every loop test uses `--sandbox host`.
+- **The Claude worker** (§6.2). No test calls a real model. The loop is tested with the stored-candidate worker.
+- **M4's hostile-instruction test**, which needs both.
+
+**Not built.**
+
+- The network allow-list, the integration check tier, and the second demo with the test database (§9.3). `TestDB.env` is not read by anything.
+- The generic worker for command-line agents (§6.2).
+- Dragging a block into another area to regroup it (§3.8). Dragging within an area works.
+- A tests chip on an API arrow's label pill (§3.7 "Deeper").
+- Visual regression by stored screenshots (M2). The tests assert the computed styles that distinguish requested from implemented instead.
+- The hand-checked sample of 30 blocks and 30 arrows on Hono (M1).
+- Opening VS Code itself is not exercised by a test. The tests point the editor command at a script that records the path and line it was given.
+
+**Decisions made while building.** Each replaces the text it names.
+
+| Topic | What was built | Why |
+|---|---|---|
+| Zoom thresholds (§3.4) | System below 0.3, Architecture 0.3 to 0.6, Blocks above 0.6 | The 11 px text floor could not hold at the starting values. Between 0.6 and 1.0 card text is scaled up in steps and fewer bullets are shown, so nothing drops below 11 px |
+| Top-level layout (§3.11) | ELK decides the order of top-level areas, callers first. They are then arranged in rows that fit a wide screen | A strictly layered top level made the shop fixture three screens tall. It now fits one screen at Architecture level |
+| Area titles | Drawn above the arrows, in a layer of their own | Arrows were striking titles out |
+| Arrow labels | Sit on the last run of the arrow, near the block they point at, and fan out when several arrive together | Labels at the midpoint collided |
+| State badges on blocks | Hang on the card's top edge | In the title row they pushed the name out |
+| Host sandbox | `decker --sandbox host` runs checks and agent commands on the engineer's machine with no isolation. It is opt-in and announced at start-up | Without it the loop could not be exercised on a machine with no container runtime. Containers remain the default whenever a runtime answers |
+| Stored candidates | A worker that replays stored plans and candidates from `examples/shop/demo` | Makes every loop outcome deterministic, as §9.1 asks for the flawed candidate |
+| Accepted intent | On Accept, an arrow's kind, label, bullets and the plan's accepted limits are saved to `.deck/notes.json` as authored notes | The extractor sees only a call. Without this the "API · Reserve stock" label would vanish on acceptance |
+| Source folder | When one folder holds at least 70% of the code, its contents are the top level of the map | Otherwise a repository with `src/` beside scripts shows one giant "Src" area |
+| Single-file folders | A folder holding one block is shown as that block in the parent area | Hono's 25 middleware folders were 25 areas of one block each |
+| Function-valued class properties | Treated as operations, like methods | Common in TypeScript, and tests call them |
+| Route operations | A route whose handler calls one operation borrows that operation's doc comment as its bullet | "List the products on sale" reads better than "GET /products" alone |
+| Reference service size (§9.1) | About 900 lines with 45 tests, not 2,000 | Enough to exercise every element |
+
+**Measured.** On an Intel Core i7-13700K with 32 GB RAM, Windows 11, headless Edge at 1440 by 900. Frame rates are the range over three runs of the test suite. Everything else is a single run.
+
+| Budget (§10) | Target | Measured |
+|---|---|---|
+| Pan and zoom, shop fixture (42 blocks, 77 arrows) | 60 fps at the 95th percentile | 60 to 80 fps |
+| Pan and zoom, stress fixture (1,500 blocks, 3,784 arrows) | 45 fps or better, at most 400 blocks in the DOM | 48 fps at System level. Zoomed in: 40, 48 and 60 fps, so one run of three missed the target. At most 64 blocks in the DOM |
+| The 300-block, 600-arrow case | 60 fps | Not measured: no fixture of that size exists |
+| Select, hover, expand, open panel | Under 100 ms | Not measured in isolation |
+| First map, `examples/shop` | Under 3 s | 0.8 s (extraction 0.15 s) |
+| First map, Hono, plain clone | Under 20 s cold | 3.3 s (extraction 2.0 s), 141 blocks, 98.4% resolved |
+| First map, Supabase Storage, nothing installed | | 4.2 s (extraction 2.5 s), 250 blocks, 83.4% resolved |
+| Map update after a one-file edit | Under 2 s | 0.8 s |
+| First map, 10,000 and 200,000 lines | | Not measured |
+
+Supabase Storage's 83.4% is with no dependencies installed, so every type imported from a package is unknown. The figure with dependencies installed has not been measured.
 
 ## 1. The idea
 
@@ -120,9 +183,11 @@ Zoom controls **how many things** are in view. It never changes layout: every bl
 
 | Level | Zoom (starting values, tune in M0) | Areas | Blocks | Arrows |
 |---|---|---|---|---|
-| **System** | below 0.2 | Title and block count | Unlabeled chips, so density stays visible | One per pair of areas, with a count |
-| **Architecture** | 0.2 to 0.55 | Title | Name only, set large enough to read | One per pair of blocks; labels on hover |
-| **Blocks** | above 0.55 | Title | Full card: name, summary, bullets | One per pair of blocks, labeled |
+| **System** | below 0.3 | Title and block count | Unlabeled chips, so density stays visible | One per pair of areas, with a count |
+| **Architecture** | 0.3 to 0.6 | Title | Name only, set large enough to read | One per pair of blocks; labels on hover |
+| **Blocks** | above 0.6 | Title | Full card: name, summary, bullets | One per pair of blocks, labeled |
+
+These are the values tuned during M0. The starting values were 0.2 and 0.55.
 
 Rules:
 
@@ -269,7 +334,8 @@ When an agent finishes, the same canvas enters review mode for that change. A ba
 
 ### 3.11 Layout
 
-- The first build lays out automatically with ELK's layered algorithm, top to bottom, so callers sit above what they call and the picture reads like a layered architecture drawing. Arrows attach to the top and bottom of blocks.
+- The first build lays out automatically with ELK's layered algorithm, top to bottom, so callers sit above what they call and the picture reads like a layered architecture drawing. Arrows attach to the top and bottom of blocks, and to the sides when two blocks sit side by side.
+- At the top level, ELK decides the order of the areas and they are then arranged in rows, in reading order, to fit a wide screen.
 - After that, positions are saved in `.deck/layout.json`. A rebuild places only new blocks, inside their area and near their callers. It never moves existing ones.
 - Blocks the engineer has dragged stay where they were put.
 - "Tidy up" re-runs the full layout on request, animated and undoable.
@@ -634,7 +700,7 @@ decker <path-to-repo>     starts the local server and opens the browser
 
 ### 9.1 The reference service
 
-`examples/shop` is a small strict-TypeScript service, about 2,000 lines, written for this project:
+`examples/shop` is a small strict-TypeScript service, about 900 lines as built, written for this project:
 
 - Areas: Orders, Inventory, Catalog, Payments (a stub), HTTP (a thin adapter), and Shared types.
 - In-memory storage and a Vitest suite.
@@ -807,7 +873,9 @@ Decided with Jay on 2026-10-11:
 
 Still open. None of these blocks M0 to M2:
 
-- **A container runtime is not installed on the development machine.** It has neither Docker nor WSL 2. One of Docker Desktop or Podman, on WSL 2, is needed before M3.
+- **A container runtime is not installed on the development machine.** It has neither Docker nor WSL 2. M3 was built and tested in host-sandbox mode instead. One of Docker Desktop or Podman, on WSL 2, is needed to run and verify the container sandbox.
+- **The Claude worker has not been run.** It needs a first real change, with someone watching what the agent does.
+- **Look and feel sign-off.** M0's gate was skipped at Jay's instruction. His review of the map is still owed.
 - **Python before C++?** C++ remains launch language two. A Python adapter is cheaper and would let Jay map his own projects. Decide at M5.
 - **Tests on arrows.** The PoC attaches tests to arrows only through a change's requirements. Whether to attribute integration tests to the arrows they cross is undecided.
 

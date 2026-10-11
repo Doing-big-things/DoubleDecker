@@ -1,5 +1,5 @@
 // Search and fly (Ctrl+K).
-import { type DeckIndex, type Id, cardBullets, pathTo } from '@decker/deck-model';
+import { cardBullets, type DeckIndex, type Id, pathTo } from '@decker/deck-model';
 import { Command } from 'cmdk';
 import { useMemo, useState } from 'react';
 import { camera } from '../map/camera';
@@ -28,21 +28,63 @@ function entriesOf(index: DeckIndex): Entry[] {
       .slice(1, -1)
       .map((n) => n.name)
       .join(' ▸ ');
-  for (const area of index.areas) out.push({ id: area.id, kind: 'area', name: area.name, where: where(area.id), hay: area.name.toLowerCase(), target: area.id });
+  for (const area of index.areas)
+    out.push({
+      id: area.id,
+      kind: 'area',
+      name: area.name,
+      where: where(area.id),
+      hay: area.name.toLowerCase(),
+      target: area.id,
+    });
   for (const block of index.blocks) {
     const w = where(block.id);
-    out.push({ id: block.id, kind: 'block', name: block.name, sub: block.summary?.text, where: w, hay: `${block.name} ${block.summary?.text ?? ''} ${block.source[0]?.path ?? ''}`.toLowerCase(), target: block.id });
+    out.push({
+      id: block.id,
+      kind: 'block',
+      name: block.name,
+      sub: block.summary?.text,
+      where: w,
+      hay: `${block.name} ${block.summary?.text ?? ''} ${block.source[0]?.path ?? ''}`.toLowerCase(),
+      target: block.id,
+    });
     for (const b of cardBullets(index, block.id)) {
       const op = b.opId ? index.byId.get(b.opId) : undefined;
-      if (op) out.push({ id: op.id, kind: 'operation', name: op.name, sub: b.bullet.text, where: `${w} ▸ ${block.name}`, hay: `${op.name} ${b.bullet.text}`.toLowerCase(), target: block.id, op: op.id });
-      else out.push({ id: b.bullet.id, kind: 'behavior', name: b.bullet.text, where: `${w} ▸ ${block.name}`, hay: b.bullet.text.toLowerCase(), target: block.id });
+      if (op)
+        out.push({
+          id: op.id,
+          kind: 'operation',
+          name: op.name,
+          sub: b.bullet.text,
+          where: `${w} ▸ ${block.name}`,
+          hay: `${op.name} ${b.bullet.text}`.toLowerCase(),
+          target: block.id,
+          op: op.id,
+        });
+      else
+        out.push({
+          id: b.bullet.id,
+          kind: 'behavior',
+          name: b.bullet.text,
+          where: `${w} ▸ ${block.name}`,
+          hay: b.bullet.text.toLowerCase(),
+          target: block.id,
+        });
     }
   }
   for (const test of index.snapshot.tests) {
     const target = test.targets[0];
     const block = target ? index.blockOf.get(target.id) : undefined;
     if (!block) continue;
-    out.push({ id: test.id, kind: 'test', name: test.name, where: index.byId.get(block)?.name ?? '', hay: test.name.toLowerCase(), target: block, op: target!.id === block ? undefined : target!.id });
+    out.push({
+      id: test.id,
+      kind: 'test',
+      name: test.name,
+      where: index.byId.get(block)?.name ?? '',
+      hay: test.name.toLowerCase(),
+      target: block,
+      op: target!.id === block ? undefined : target!.id,
+    });
   }
   cache.set(index, out);
   return out;
@@ -56,7 +98,8 @@ function search(entries: Entry[], query: string): Entry[] {
     if (!words.every((w) => e.hay.includes(w))) continue;
     const name = e.name.toLowerCase();
     const first = words[0]!;
-    const score = (name === first ? 0 : name.startsWith(first) ? 1 : name.includes(first) ? 2 : 3) * 4 + WEIGHT[e.kind];
+    const score =
+      (name === first ? 0 : name.startsWith(first) ? 1 : name.includes(first) ? 2 : 3) * 4 + WEIGHT[e.kind];
     scored.push({ e, score });
   }
   scored.sort((a, b) => a.score - b.score || a.e.name.length - b.e.name.length);
@@ -80,7 +123,10 @@ export function Palette() {
     { name: 'Tidy up the layout', run: () => void st().tidy() },
     { name: 'Open every tests drawer', keys: 'Shift T', run: () => st().toggleAllTests() },
     { name: 'Toggle the outline', keys: 'Ctrl \\', run: () => st().set({ outlineOpen: !st().outlineOpen }) },
-    { name: 'Switch between dark and light', run: () => st().setTheme(st().theme === 'dark' ? 'light' : 'dark') },
+    {
+      name: 'Switch between dark and light',
+      run: () => st().setTheme(st().theme === 'dark' ? 'light' : 'dark'),
+    },
     { name: 'Show the change tray', run: () => st().set({ trayOpen: true }) },
     { name: 'Keyboard shortcuts', keys: '?', run: () => st().set({ helpOpen: true }) },
   ];
@@ -92,7 +138,12 @@ export function Palette() {
     <>
       <div className="dd-overlay" onClick={close} />
       <Command className="dd-palette" shouldFilter={false} label="Search the deck" data-testid="palette">
-        <Command.Input value={query} onValueChange={setQuery} placeholder="Search blocks, operations, behavior, tests…" autoFocus />
+        <Command.Input
+          value={query}
+          onValueChange={setQuery}
+          placeholder="Search blocks, operations, behavior, tests…"
+          autoFocus
+        />
         <Command.List>
           <Command.Empty>Nothing on the deck matches “{query}”.</Command.Empty>
           {results.length ? (

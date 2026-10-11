@@ -1,6 +1,18 @@
 // M0 and M2 on the hand-written shop fixture, with no server (spec §11).
 import { expect, test } from '@playwright/test';
-import { arrow, block, canvas, flyTo, measureFps, openFixture, ready, setZoom, smallText, wheelTo, zoom } from './helpers';
+import {
+  arrow,
+  block,
+  canvas,
+  flyTo,
+  measureFps,
+  openFixture,
+  ready,
+  setZoom,
+  smallText,
+  wheelTo,
+  zoom,
+} from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await openFixture(page);
@@ -35,12 +47,13 @@ test('opens on the whole map and shows one level of abstraction per zoom level',
 });
 
 test('zooming changes the drawing and never the layout', async ({ page }) => {
-  const rect = (name: string) => page.evaluate((n) => {
-    const st = window.__decker.store.getState();
-    const id = st.index.blocks.find((b: { name: string }) => b.name === n).id;
-    const box = window.__decker.camera.box(id);
-    return [box.ax, box.ay, box.w, box.h];
-  }, name);
+  const rect = (name: string) =>
+    page.evaluate((n) => {
+      const st = window.__decker.store.getState();
+      const id = st.index.blocks.find((b: { name: string }) => b.name === n).id;
+      const box = window.__decker.camera.box(id);
+      return [box.ax, box.ay, box.w, box.h];
+    }, name);
   const before = await rect('Checkout');
   await setZoom(page, 1.2);
   expect(await rect('Checkout')).toEqual(before);
@@ -73,7 +86,9 @@ test('hover keeps a block and its neighbors and dims the rest', async ({ page })
   await expect(block(page, 'Reservations')).not.toHaveClass(/dd-dim/);
   await expect(block(page, 'StockStore')).not.toHaveClass(/dd-dim/);
   await expect(block(page, 'Inventory')).not.toHaveClass(/dd-dim/);
-  await expect.poll(async () => Number(await block(page, 'Restock').evaluate((el) => getComputedStyle(el).opacity))).toBeCloseTo(0.35, 1);
+  await expect
+    .poll(async () => Number(await block(page, 'Restock').evaluate((el) => getComputedStyle(el).opacity)))
+    .toBeCloseTo(0.35, 1);
   await page.mouse.move(5, 300);
   await expect(block(page, 'Restock')).not.toHaveClass(/dd-dim/);
 });
@@ -87,10 +102,16 @@ test('drilling in: select, expand in place, internals, tests, and the code peek'
   const panel = page.getByTestId('panel');
   await expect(panel.getByTestId('panel-name')).toHaveText(/Inventory/);
   await expect(panel).toContainText('Tracks stock and reservations');
-  await expect(panel.getByTestId('panel-bullet').filter({ hasText: 'Reserve stock for an order' })).toContainText('doc comment');
-  await expect(panel.getByTestId('panel-bullet').filter({ hasText: 'Rejects the whole order' })).toContainText('AI summary');
+  await expect(
+    panel.getByTestId('panel-bullet').filter({ hasText: 'Reserve stock for an order' }),
+  ).toContainText('doc comment');
+  await expect(
+    panel.getByTestId('panel-bullet').filter({ hasText: 'Rejects the whole order' }),
+  ).toContainText('AI summary');
   await expect(panel.getByTestId('panel-op').first()).toContainText('reserve(orderId: OrderId');
-  await expect(panel.getByTestId('panel-arrow').filter({ hasText: 'Checkout' })).toContainText('API · reserve');
+  await expect(panel.getByTestId('panel-arrow').filter({ hasText: 'Checkout' })).toContainText(
+    'API · reserve',
+  );
 
   // Five bullets on the card, the rest behind "+N more".
   await expect(card.locator('.dd-bullet')).toHaveCount(5);
@@ -163,7 +184,12 @@ test('tests hang off the architecture behind a collapsed chip', async ({ page })
   await expect(drawer).toHaveCount(0);
   await flyTo(page, 'Fulfillment');
   await page.keyboard.press('t');
-  await expect(block(page, 'Fulfillment').locator('.dd-test').filter({ hasText: 'prints a packing slip' }).locator('.dd-glyph')).toHaveText('–');
+  await expect(
+    block(page, 'Fulfillment')
+      .locator('.dd-test')
+      .filter({ hasText: 'prints a packing slip' })
+      .locator('.dd-glyph'),
+  ).toHaveText('–');
   await page.keyboard.press('t');
 
   // Shift+T opens every drawer in view, and at Architecture level marks every block.
@@ -246,10 +272,18 @@ test('the outline is the same deck as a searchable tree', async ({ page, context
   await page.keyboard.press('Control+\\');
   const outline = page.getByTestId('outline');
   await expect(outline).toBeVisible();
-  await expect(outline.getByTestId('outline-row').filter({ hasText: /^Inventory$/ }).first()).toBeVisible();
+  await expect(
+    outline
+      .getByTestId('outline-row')
+      .filter({ hasText: /^Inventory$/ })
+      .first(),
+  ).toBeVisible();
   await outline.getByTestId('outline-filter').fill('reserve stock');
   await expect(outline.getByTestId('outline-row').filter({ hasText: /^Catalog$/ })).toHaveCount(0);
-  await outline.locator('.dd-tree-row[data-kind="bullet"]').filter({ hasText: 'Reserve stock for an order' }).click();
+  await outline
+    .locator('.dd-tree-row[data-kind="bullet"]')
+    .filter({ hasText: 'Reserve stock for an order' })
+    .click();
   await expect(block(page, 'Inventory')).toHaveClass(/is-selected/);
   // Deck text: the same deck as a plain outline, and the format agents receive.
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -279,11 +313,12 @@ test('positions survive a reload; dragging and Tidy up work and undo', async ({ 
   const moved = (await card.boundingBox())!;
   expect(moved.x).toBeGreaterThan(a.x + 80);
 
-  const place = () => page.evaluate(() => {
-    const st = window.__decker.store.getState();
-    const id = st.index.blocks.find((b: { name: string }) => b.name === 'Money').id;
-    return st.positions[id];
-  });
+  const place = () =>
+    page.evaluate(() => {
+      const st = window.__decker.store.getState();
+      const id = st.index.blocks.find((b: { name: string }) => b.name === 'Money').id;
+      return st.positions[id];
+    });
   const dragged = await place();
   await page.waitForTimeout(500);
   await page.reload();
@@ -298,7 +333,8 @@ test('positions survive a reload; dragging and Tidy up work and undo', async ({ 
 });
 
 test('the light theme comes from the same tokens and is remembered', async ({ page }) => {
-  const bg = () => page.evaluate(() => getComputedStyle(document.querySelector('.react-flow')!).backgroundColor);
+  const bg = () =>
+    page.evaluate(() => getComputedStyle(document.querySelector('.react-flow')!).backgroundColor);
   expect(await bg()).toBe('rgb(14, 15, 18)');
   await page.getByTestId('theme').click();
   expect(await bg()).toBe('rgb(244, 245, 247)');
@@ -306,33 +342,36 @@ test('the light theme comes from the same tokens and is remembered', async ({ pa
   await ready(page);
   expect(await bg()).toBe('rgb(244, 245, 247)');
   // Body text keeps at least 4.5:1 contrast against its surface in both themes.
-  const contrast = () => page.evaluate(() => {
-    const lum = (c: string) => {
-      const [r, g, b] = c.match(/\d+/g)!.map((v) => {
-        const x = Number(v) / 255;
-        return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
-      });
-      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
-    };
-    const cs = getComputedStyle(document.documentElement);
-    const probe = (fg: string, bg: string) => {
-      const el = document.createElement('i');
-      el.style.color = cs.getPropertyValue(fg);
-      el.style.backgroundColor = cs.getPropertyValue(bg);
-      document.body.append(el);
-      const s = getComputedStyle(el);
-      const [a, b] = [lum(s.color), lum(s.backgroundColor)];
-      el.remove();
-      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-    };
-    return [probe('--text', '--surface'), probe('--muted', '--surface'), probe('--muted', '--chrome')];
-  });
+  const contrast = () =>
+    page.evaluate(() => {
+      const lum = (c: string) => {
+        const [r, g, b] = c.match(/\d+/g)!.map((v) => {
+          const x = Number(v) / 255;
+          return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+      };
+      const cs = getComputedStyle(document.documentElement);
+      const probe = (fg: string, bg: string) => {
+        const el = document.createElement('i');
+        el.style.color = cs.getPropertyValue(fg);
+        el.style.backgroundColor = cs.getPropertyValue(bg);
+        document.body.append(el);
+        const s = getComputedStyle(el);
+        const [a, b] = [lum(s.color), lum(s.backgroundColor)];
+        el.remove();
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      };
+      return [probe('--text', '--surface'), probe('--muted', '--surface'), probe('--muted', '--chrome')];
+    });
   for (const ratio of await contrast()) expect(ratio).toBeGreaterThan(4.5);
   await page.getByTestId('theme').click();
   for (const ratio of await contrast()) expect(ratio).toBeGreaterThan(4.5);
 });
 
-test('editing the deck: every gesture becomes an operation, and a request never looks implemented', async ({ page }) => {
+test('editing the deck: every gesture becomes an operation, and a request never looks implemented', async ({
+  page,
+}) => {
   // 1. Click a bullet and type: set_behavior.
   await flyTo(page, 'Pricing');
   const pricing = block(page, 'Pricing');
@@ -352,7 +391,9 @@ test('editing the deck: every gesture becomes an operation, and a request never 
   // 3. N: a new block, dashed and badged.
   await page.keyboard.press('n');
   await page.getByTestId('block-name').fill('Notifications');
-  await page.getByTestId('block-bullets').fill('Email a receipt when an order is placed\nText the customer when an order ships');
+  await page
+    .getByTestId('block-bullets')
+    .fill('Email a receipt when an order is placed\nText the customer when an order ships');
   await page.getByTestId('block-submit').click();
   await flyTo(page, 'Notifications');
   const added = block(page, 'Notifications');
@@ -387,11 +428,17 @@ test('editing the deck: every gesture becomes an operation, and a request never 
   });
   const requested = arrow(page, ids.discounts, ids.pricing);
   await expect(requested).toHaveAttribute('data-s', 'requested');
-  expect(await requested.locator('.dd-edge-line').evaluate((el) => getComputedStyle(el).strokeDasharray)).not.toBe('none');
-  await expect(page.getByTestId('arrow-pill').filter({ hasText: 'Quote a discount' })).toContainText('Requested');
+  expect(
+    await requested.locator('.dd-edge-line').evaluate((el) => getComputedStyle(el).strokeDasharray),
+  ).not.toBe('none');
+  await expect(page.getByTestId('arrow-pill').filter({ hasText: 'Quote a discount' })).toContainText(
+    'Requested',
+  );
   // An implemented arrow is a solid line.
   const solid = arrow(page, ids.discounts, ids.money);
-  expect(await solid.locator('.dd-edge-line').evaluate((el) => getComputedStyle(el).strokeDasharray)).toBe('none');
+  expect(await solid.locator('.dd-edge-line').evaluate((el) => getComputedStyle(el).strokeDasharray)).toBe(
+    'none',
+  );
 
   // 5. F2 renames; 6. Delete requests removal.
   await flyTo(page, 'Categories');
@@ -463,7 +510,8 @@ test('stays within budget: the shop fixture, then 1,500 blocks and 3,800 arrows'
     await page.mouse.move(cx, cy);
     for (let i = 0; i < 14; i++) await page.mouse.wheel(0, i < 7 ? -120 : 120);
     await page.mouse.down();
-    for (let i = 0; i < 30; i++) await page.mouse.move(cx + Math.sin(i / 5) * 320, cy + Math.cos(i / 5) * 200);
+    for (let i = 0; i < 30; i++)
+      await page.mouse.move(cx + Math.sin(i / 5) * 320, cy + Math.cos(i / 5) * 200);
     await page.mouse.up();
   };
 

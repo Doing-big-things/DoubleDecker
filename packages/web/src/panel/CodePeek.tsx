@@ -12,10 +12,18 @@ let highlighter: Promise<Highlighter> | null = null;
 
 function getHighlighter(): Promise<Highlighter> {
   highlighter ??= (async () => {
-    const [{ createHighlighterCore }, { createJavaScriptRegexEngine }] = await Promise.all([import('shiki/core'), import('shiki/engine/javascript')]);
+    const [{ createHighlighterCore }, { createJavaScriptRegexEngine }] = await Promise.all([
+      import('shiki/core'),
+      import('shiki/engine/javascript'),
+    ]);
     return (await createHighlighterCore({
       themes: [import('@shikijs/themes/github-dark-default'), import('@shikijs/themes/github-light-default')],
-      langs: [import('@shikijs/langs/typescript'), import('@shikijs/langs/tsx'), import('@shikijs/langs/javascript'), import('@shikijs/langs/json')],
+      langs: [
+        import('@shikijs/langs/typescript'),
+        import('@shikijs/langs/tsx'),
+        import('@shikijs/langs/javascript'),
+        import('@shikijs/langs/json'),
+      ],
       engine: createJavaScriptRegexEngine(),
     })) as unknown as Highlighter;
   })();
@@ -59,7 +67,14 @@ export function CodePeek({ peek }: { peek: Peek }) {
       if (t === null) return;
       void getHighlighter()
         .then((h) => {
-          if (live) setTokens(h.codeToTokens(t, { lang: langOf(peek.path), themes: { dark: 'github-dark-default', light: 'github-light-default' }, defaultColor: false }).tokens);
+          if (live)
+            setTokens(
+              h.codeToTokens(t, {
+                lang: langOf(peek.path),
+                themes: { dark: 'github-dark-default', light: 'github-light-default' },
+                defaultColor: false,
+              }).tokens,
+            );
         })
         .catch(() => {});
     });
@@ -81,7 +96,14 @@ export function CodePeek({ peek }: { peek: Peek }) {
         <span title={`${peek.path}:${peek.startLine}`}>
           {peek.path}:{peek.startLine}
         </span>
-        <button type="button" className="dd-btn" style={{ height: 24, marginLeft: 'auto' }} onClick={openSelectedInEditor} title="Open in editor  (Ctrl+Enter)" data-testid="open-editor">
+        <button
+          type="button"
+          className="dd-btn"
+          style={{ height: 24, marginLeft: 'auto' }}
+          onClick={openSelectedInEditor}
+          title="Open in editor  (Ctrl+Enter)"
+          data-testid="open-editor"
+        >
           <ExternalLink size={12} /> Open
         </button>
       </div>
@@ -117,7 +139,13 @@ export function DiffView({ files }: { files: FileDiff[] }) {
           </div>
           <div className="dd-code">
             {file.patch.split('\n').map((line, i) => {
-              const kind = line.startsWith('@@') ? ' is-hunk' : line.startsWith('+') ? ' is-add' : line.startsWith('-') ? ' is-del' : '';
+              const kind = line.startsWith('@@')
+                ? ' is-hunk'
+                : line.startsWith('+')
+                  ? ' is-add'
+                  : line.startsWith('-')
+                    ? ' is-del'
+                    : '';
               return (
                 <div className={`dd-code-line${kind}`} key={i}>
                   <i>{line[0] === '+' || line[0] === '-' ? line[0] : ''}</i>

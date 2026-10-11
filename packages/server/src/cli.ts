@@ -48,7 +48,8 @@ export async function main(argv: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  if (sandbox && !['docker', 'podman', 'host', 'none'].includes(sandbox)) throw new Error(`Unknown sandbox "${sandbox}".`);
+  if (sandbox && !['docker', 'podman', 'host', 'none'].includes(sandbox))
+    throw new Error(`Unknown sandbox "${sandbox}".`);
 
   const started = Date.now();
   const server = await startServer({
@@ -62,14 +63,31 @@ export async function main(argv: string[]): Promise<void> {
   });
   const stats = server.service.snapshot().stats;
   const blocks = server.service.snapshot().nodes.filter((n) => n.kind === 'block').length;
-  console.log(`decker: mapped ${path.basename(server.service.root)} in ${Date.now() - started} ms (${blocks} blocks, ${stats?.files ?? 0} files, extraction ${server.service.lastExtractMs} ms)`);
-  if (server.service.sandbox === 'host') console.log('decker: sandbox is "host": checks and agent commands run on this machine with no isolation.');
-  if (server.service.sandbox === 'none') console.log('decker: no container runtime answered. The map works; running checks and agents needs Docker or Podman, or --sandbox=host.');
+  console.log(
+    `decker: mapped ${path.basename(server.service.root)} in ${Date.now() - started} ms (${blocks} blocks, ${stats?.files ?? 0} files, extraction ${server.service.lastExtractMs} ms)`,
+  );
+  if (server.service.sandbox === 'host')
+    console.log(
+      'decker: sandbox is "host": checks and agent commands run on this machine with no isolation.',
+    );
+  if (server.service.sandbox === 'none')
+    console.log(
+      'decker: no container runtime answered. The map works; running checks and agents needs Docker or Podman, or --sandbox=host.',
+    );
   console.log(`decker: ${server.url}`);
 
   if (!noOpen) {
-    const [cmd, cmdArgs] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '""', server.url]] : process.platform === 'darwin' ? ['open', [server.url]] : ['xdg-open', [server.url]];
-    spawn(cmd as string, cmdArgs as string[], { stdio: 'ignore', detached: true, windowsVerbatimArguments: process.platform === 'win32' }).unref();
+    const [cmd, cmdArgs] =
+      process.platform === 'win32'
+        ? ['cmd', ['/c', 'start', '""', server.url]]
+        : process.platform === 'darwin'
+          ? ['open', [server.url]]
+          : ['xdg-open', [server.url]];
+    spawn(cmd as string, cmdArgs as string[], {
+      stdio: 'ignore',
+      detached: true,
+      windowsVerbatimArguments: process.platform === 'win32',
+    }).unref();
   }
   const stop = () => {
     void server.close().finally(() => process.exit(0));

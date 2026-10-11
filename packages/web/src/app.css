@@ -231,7 +231,10 @@ button {
   background: var(--surface);
   font-size: 12.5px;
   white-space: nowrap;
-  transition: background 120ms, border-color 120ms, color 120ms;
+  transition:
+    background 120ms,
+    border-color 120ms,
+    color 120ms;
 }
 .dd-btn:hover:not(:disabled) {
   border-color: var(--line-strong);
@@ -382,7 +385,9 @@ button {
   background: var(--surface);
   border: 1.5px solid var(--accent);
   opacity: 0;
-  transition: opacity 120ms, transform 120ms;
+  transition:
+    opacity 120ms,
+    transform 120ms;
   cursor: crosshair;
   z-index: 3;
 }
@@ -420,7 +425,10 @@ button {
   border-radius: 16px;
   background: hsl(var(--h) 62% 62% / var(--area-fill));
   border: 1px solid hsl(var(--h) 45% 62% / var(--area-line));
-  transition: border-color 120ms, opacity 120ms, background 120ms;
+  transition:
+    border-color 120ms,
+    opacity 120ms,
+    background 120ms;
 }
 .dd-area[data-depth="1"] {
   background: hsl(var(--h) 62% 62% / calc(var(--area-fill) * 0.9));
@@ -575,7 +583,11 @@ button {
   background: var(--surface);
   font-size: calc(12.5px * var(--ts));
   line-height: 1.44;
-  transition: border-color 120ms, box-shadow 120ms, opacity 160ms, background 120ms;
+  transition:
+    border-color 120ms,
+    box-shadow 120ms,
+    opacity 160ms,
+    background 120ms;
 }
 /* The card clips its content; the ports sit outside the clip so they can straddle the border. */
 .dd-block-clip {
@@ -592,7 +604,9 @@ button {
 }
 .dd-block.is-selected {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 0 0 5px var(--accent-soft);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 0 5px var(--accent-soft);
 }
 .dd-block.is-requested {
   border-style: dashed;
@@ -681,6 +695,20 @@ button {
 }
 .dd-badge[data-s="untested"] {
   --c: var(--muted);
+}
+/* A block's state hangs on its top edge like a tag, so it never crowds the name. */
+.dd-block-flag {
+  position: absolute;
+  left: 10px;
+  top: 0;
+  transform: translateY(-55%);
+  display: flex;
+  pointer-events: none;
+  z-index: 2;
+}
+.dd-block-flag .dd-badge {
+  background: color-mix(in srgb, var(--c) 22%, var(--canvas));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent);
 }
 .dd-opaque {
   flex: none;
@@ -847,7 +875,9 @@ button {
 .dd-op:hover,
 .dd-op.is-focus {
   background: var(--surface-2);
-  box-shadow: -6px 0 0 var(--surface-2), 6px 0 0 var(--surface-2);
+  box-shadow:
+    -6px 0 0 var(--surface-2),
+    6px 0 0 var(--surface-2);
 }
 .dd-op .dd-bullet .dd-chip {
   margin-left: auto;
@@ -1032,12 +1062,16 @@ button {
   fill: none;
   stroke: var(--edge);
   stroke-linecap: round;
-  transition: stroke 120ms, opacity 160ms;
+  transition:
+    stroke 120ms,
+    opacity 160ms;
 }
 .dd-edge path.dd-edge-head {
   fill: var(--edge);
   stroke: none;
-  transition: fill 120ms, opacity 160ms;
+  transition:
+    fill 120ms,
+    opacity 160ms;
 }
 .dd-edge.is-lit path.dd-edge-line {
   stroke: var(--edge-lit);
@@ -1104,7 +1138,10 @@ button {
   white-space: nowrap;
   pointer-events: all;
   cursor: default;
-  transition: opacity 160ms, border-color 120ms, color 120ms;
+  transition:
+    opacity 160ms,
+    border-color 120ms,
+    color 120ms;
 }
 .dd-edge-pill.is-lit {
   color: var(--text);
@@ -1301,6 +1338,7 @@ button {
   color: var(--faint);
 }
 .dd-h small {
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;

@@ -13,7 +13,15 @@ export interface HarnessRun {
 }
 
 interface VitestReport {
-  testResults?: { name: string; assertionResults?: { ancestorTitles?: string[]; title: string; status: string; failureMessages?: string[] }[] }[];
+  testResults?: {
+    name: string;
+    assertionResults?: {
+      ancestorTitles?: string[];
+      title: string;
+      status: string;
+      failureMessages?: string[];
+    }[];
+  }[];
 }
 
 const RESULTS = '.deck/cache/vitest-results.json';
@@ -50,15 +58,30 @@ export async function runChecks(
       mkdirSync(path.dirname(file), { recursive: true });
       rmSync(file, { force: true });
     }
-    const command = vitest ? `${check.command} --reporter=default --reporter=json --outputFile.json=${RESULTS}` : check.command;
+    const command = vitest
+      ? `${check.command} --reporter=default --reporter=json --outputFile.json=${RESULTS}`
+      : check.command;
     progress?.(`check: ${check.name}`);
     const started = Date.now();
     const result = await exec(check, command);
     if ('skipped' in result) {
-      out.checks.push({ name: check.name, command: check.command, exitCode: 0, durationMs: 0, output: '', skipped: result.skipped });
+      out.checks.push({
+        name: check.name,
+        command: check.command,
+        exitCode: 0,
+        durationMs: 0,
+        output: '',
+        skipped: result.skipped,
+      });
       continue;
     }
-    out.checks.push({ name: check.name, command: check.command, exitCode: result.exitCode, durationMs: Date.now() - started, output: result.output.slice(-20_000) });
+    out.checks.push({
+      name: check.name,
+      command: check.command,
+      exitCode: result.exitCode,
+      durationMs: Date.now() - started,
+      output: result.output.slice(-20_000),
+    });
     if (!vitest || !existsSync(file)) continue;
     try {
       const report = JSON.parse(readFileSync(file, 'utf8')) as VitestReport;
@@ -66,14 +89,22 @@ export async function runChecks(
       for (const t of tests) byKey.set(`${t.source.path}#${[...t.suite, t.name].join('/')}`, t);
       for (const suite of report.testResults ?? []) {
         const name = suite.name.replace(/\\/g, '/');
-        const rel = [...new Set(tests.map((t) => t.source.path))].find((p) => name.endsWith(`/${p}`) || name === p);
+        const rel = [...new Set(tests.map((t) => t.source.path))].find(
+          (p) => name.endsWith(`/${p}`) || name === p,
+        );
         if (!rel) continue;
         for (const a of suite.assertionResults ?? []) {
           const test = byKey.get(`${rel}#${[...(a.ancestorTitles ?? []), a.title].join('/')}`);
           if (!test) continue;
-          const status: TestStatus = a.status === 'passed' ? 'passed' : a.status === 'failed' ? 'failed' : 'skipped';
+          const status: TestStatus =
+            a.status === 'passed' ? 'passed' : a.status === 'failed' ? 'failed' : 'skipped';
           out.results[test.id] = status;
-          if (status === 'failed') out.failures[test.id] = (a.failureMessages?.[0] ?? '').split('\n').slice(0, 3).join(' ').slice(0, 400);
+          // The first line says what failed. The rest is a stack trace full of machine paths.
+          if (status === 'failed')
+            out.failures[test.id] = (a.failureMessages?.[0] ?? '')
+              .split('\n')[0]!
+              .replace(/\s*\/\/.*$/, '')
+              .slice(0, 200);
         }
       }
     } catch {

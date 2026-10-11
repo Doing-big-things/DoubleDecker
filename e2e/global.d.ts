@@ -5,4 +5,5 @@ declare global {
     __decker: { store: { getState(): any }; camera: any };
   }
 }
+
 export {};

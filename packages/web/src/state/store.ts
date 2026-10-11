@@ -1,28 +1,28 @@
 import {
   type Bullet,
+  buildIndex,
   type Change,
   type ChangeOp,
   type DeckBundle,
   type DeckIndex,
   type DeckSnapshot,
+  describeOp,
   type FindingKind,
+  freshId,
   type Id,
   type Point,
+  pathTo,
   type ReviewBundle,
   type ServerEvent,
   type TestRun,
-  buildIndex,
-  describeOp,
-  freshId,
-  pathTo,
   withNotes,
 } from '@decker/deck-model';
 import { create } from 'zustand';
-import { type DeckSource, type Transition, connect } from '../data/source';
-import { type Level, camera, levelOf } from '../map/camera';
-import { type Positions, autoLayout, countMissing, placeMissing } from '../model/layout';
+import { connect, type DeckSource, type Transition } from '../data/source';
+import { camera, type Level, levelOf } from '../map/camera';
+import { autoLayout, countMissing, type Positions, placeMissing } from '../model/layout';
 import { collapsedHeight } from '../model/measure';
-import { type Marks, applyOps } from '../model/pending';
+import { applyOps, type Marks } from '../model/pending';
 
 export type PanelTab = 'overview' | 'tests' | 'source' | 'diff';
 
@@ -49,11 +49,28 @@ export interface Toast {
   error?: boolean;
 }
 
-const OPEN_STATES = new Set<Change['state']>(['draft', 'planning', 'needs_answer', 'plan_ready', 'implementing', 'checking', 'in_review', 'failed']);
+const OPEN_STATES = new Set<Change['state']>([
+  'draft',
+  'planning',
+  'needs_answer',
+  'plan_ready',
+  'implementing',
+  'checking',
+  'in_review',
+  'failed',
+]);
 export const isOpen = (c: Change) => OPEN_STATES.has(c.state);
-export const isBusy = (c: Change) => c.state === 'planning' || c.state === 'implementing' || c.state === 'checking';
+export const isBusy = (c: Change) =>
+  c.state === 'planning' || c.state === 'implementing' || c.state === 'checking';
 
-const FINDING_RANK: Record<FindingKind, number> = { contradicted: 0, unrequested: 1, missing: 2, untested: 3, implemented: 4, supported: 5 };
+const FINDING_RANK: Record<FindingKind, number> = {
+  contradicted: 0,
+  unrequested: 1,
+  missing: 2,
+  untested: 3,
+  implemented: 4,
+  supported: 5,
+};
 
 export interface DeckState {
   source: DeckSource | null;
@@ -259,7 +276,9 @@ export const useDeck = create<DeckState>()((set, get) => {
         base = s.review.snapshot;
         changedIds = new Set(s.review.changedIds);
         const change = s.changes.find((c) => c.id === s.review!.changeId);
-        const missing = new Set(s.review.findings.filter((f) => f.kind === 'missing' && f.opId).map((f) => f.opId!));
+        const missing = new Set(
+          s.review.findings.filter((f) => f.kind === 'missing' && f.opId).map((f) => f.opId!),
+        );
         ops = (change?.operations ?? []).filter((o) => missing.has(o.id));
         const put = (id: Id, kind: FindingKind) => {
           const cur = findings.get(id);
@@ -272,7 +291,13 @@ export const useDeck = create<DeckState>()((set, get) => {
           for (const id of f.targetIds) {
             put(id, f.kind);
             const node = nodes.get(id);
-            if (node?.kind === 'operation' && node.parentId && f.kind !== 'supported' && f.kind !== 'untested') put(node.parentId, f.kind);
+            if (
+              node?.kind === 'operation' &&
+              node.parentId &&
+              f.kind !== 'supported' &&
+              f.kind !== 'untested'
+            )
+              put(node.parentId, f.kind);
             else if (node?.kind === 'operation' && node.parentId) changedIds!.add(node.parentId);
           }
           if (f.kind === 'missing' && f.opId) put(f.opId, 'missing');
@@ -283,7 +308,9 @@ export const useDeck = create<DeckState>()((set, get) => {
     }
     const applied = applyOps(withNotes(base, s.bundle.notes), ops);
     const index = buildIndex(applied.snapshot);
-    const exists = (id: Id | null) => id !== null && (index.byId.has(id) || index.linkById.has(id) || index.areaLinks.some((l) => l.id === id));
+    const exists = (id: Id | null) =>
+      id !== null &&
+      (index.byId.has(id) || index.linkById.has(id) || index.areaLinks.some((l) => l.id === id));
     set({
       index,
       marks: applied.marks,
@@ -302,7 +329,9 @@ export const useDeck = create<DeckState>()((set, get) => {
       changes: bundle.changes,
       status: 'ready',
       error: null,
-      positions: first ? (bundle.layout?.positions ?? {}) : { ...(bundle.layout?.positions ?? {}), ...prev.positions },
+      positions: first
+        ? (bundle.layout?.positions ?? {})
+        : { ...(bundle.layout?.positions ?? {}), ...prev.positions },
       pinned: first ? (bundle.layout?.pinned ?? []) : prev.pinned,
     });
     rebuild();
@@ -312,7 +341,11 @@ export const useDeck = create<DeckState>()((set, get) => {
     // Replies and pushed events race. Never let an older copy replace a newer one.
     const have = get().changes.find((c) => c.id === change.id);
     if (have?.rev !== undefined && change.rev !== undefined && change.rev < have.rev) return;
-    set((s) => ({ changes: s.changes.some((c) => c.id === change.id) ? s.changes.map((c) => (c.id === change.id ? change : c)) : [...s.changes, change] }));
+    set((s) => ({
+      changes: s.changes.some((c) => c.id === change.id)
+        ? s.changes.map((c) => (c.id === change.id ? change : c))
+        : [...s.changes, change],
+    }));
   };
 
   const onEvent = (event: ServerEvent) => {
@@ -328,19 +361,29 @@ export const useDeck = create<DeckState>()((set, get) => {
           if (event.change.state === 'plan_ready') get().toast('The plan is ready');
           if (event.change.state === 'failed') get().toast(event.change.error ?? 'The change failed', true);
         }
-        if (get().review?.changeId === event.change.id && event.change.state !== 'in_review') set({ review: null, showBefore: false });
+        if (get().review?.changeId === event.change.id && event.change.state !== 'in_review')
+          set({ review: null, showBefore: false });
         rebuild();
         break;
       }
       case 'progress':
-        set((s) => ({ progress: { ...s.progress, [event.changeId]: [...(s.progress[event.changeId] ?? []), event.text].slice(-200) } }));
+        set((s) => ({
+          progress: {
+            ...s.progress,
+            [event.changeId]: [...(s.progress[event.changeId] ?? []), event.text].slice(-200),
+          },
+        }));
         break;
       case 'summary': {
         const s = get();
         if (!s.bundle) break;
         const nodes = s.bundle.snapshot.nodes.map((n) =>
           n.id === event.nodeId
-            ? { ...n, summary: n.summary ?? event.summary, bullets: [...n.bullets.filter((b) => b.origin !== 'summarized'), ...event.bullets] }
+            ? {
+                ...n,
+                summary: n.summary ?? event.summary,
+                bullets: [...n.bullets.filter((b) => b.origin !== 'summarized'), ...event.bullets],
+              }
             : n,
         );
         set({ bundle: { ...s.bundle, snapshot: { ...s.bundle.snapshot, nodes } } });
@@ -368,15 +411,39 @@ export const useDeck = create<DeckState>()((set, get) => {
         void s.source?.discardChange(existing.id).catch(() => {});
       }
     } else {
-      const auto = index ? describeOp(buildIndex(applyOps(withNotes(s.bundle!.snapshot, s.bundle!.notes), after).snapshot), after[0]!, after) : 'Change';
+      const auto = index
+        ? describeOp(
+            buildIndex(applyOps(withNotes(s.bundle!.snapshot, s.bundle!.notes), after).snapshot),
+            after[0]!,
+            after,
+          )
+        : 'Change';
       const next: Change = existing
-        ? { ...existing, operations: after, updatedAt: now, title: existing.title && existing.title !== autoTitleOf(existing) ? existing.title : auto }
-        : { id: freshId('change'), title: auto, state: 'draft', operations: after, candidates: [], events: [{ at: now, type: 'created' }], createdAt: now, updatedAt: now };
+        ? {
+            ...existing,
+            operations: after,
+            updatedAt: now,
+            title: existing.title && existing.title !== autoTitleOf(existing) ? existing.title : auto,
+          }
+        : {
+            id: freshId('change'),
+            title: auto,
+            state: 'draft',
+            operations: after,
+            candidates: [],
+            events: [{ at: now, type: 'created' }],
+            createdAt: now,
+            updatedAt: now,
+          };
       autoTitles.set(next.id, auto);
       upsertChange(next);
       void s.source?.saveChange(next).catch((e: unknown) => get().toast(String(e), true));
     }
-    if (record) set((st) => ({ undoStack: [...st.undoStack, { kind: 'ops' as const, before, after }].slice(-100), redoStack: [] }));
+    if (record)
+      set((st) => ({
+        undoStack: [...st.undoStack, { kind: 'ops' as const, before, after }].slice(-100),
+        redoStack: [],
+      }));
     rebuild();
   };
   const autoTitles = new Map<Id, string>();
@@ -493,7 +560,8 @@ export const useDeck = create<DeckState>()((set, get) => {
       });
       if (changed && !opts.silent) {
         const hash = hashFor(index, id);
-        if (location.hash !== hash) history.pushState(null, '', hash === '#/' ? location.pathname + location.search : hash);
+        if (location.hash !== hash)
+          history.pushState(null, '', hash === '#/' ? location.pathname + location.search : hash);
       }
     },
 
@@ -598,7 +666,16 @@ export const useDeck = create<DeckState>()((set, get) => {
           positions,
           pinned: [],
           laying: false,
-          undoStack: [...st.undoStack, { kind: 'layout' as const, before: s.positions, after: positions, pinnedBefore: s.pinned, pinnedAfter: [] }],
+          undoStack: [
+            ...st.undoStack,
+            {
+              kind: 'layout' as const,
+              before: s.positions,
+              after: positions,
+              pinnedBefore: s.pinned,
+              pinnedAfter: [],
+            },
+          ],
           redoStack: [],
         }));
         persistLayout();
@@ -617,13 +694,21 @@ export const useDeck = create<DeckState>()((set, get) => {
       set({
         positions: after,
         pinned: pinnedAfter,
-        undoStack: [...s.undoStack, { kind: 'layout' as const, before, after, pinnedBefore: s.pinned, pinnedAfter }].slice(-100),
+        undoStack: [
+          ...s.undoStack,
+          { kind: 'layout' as const, before, after, pinnedBefore: s.pinned, pinnedAfter },
+        ].slice(-100),
         redoStack: [],
       });
       const d = draft();
       const op = d?.operations.find((o) => o.id === id && o.type === 'add_block');
       if (d && op) {
-        const next = { ...d, operations: d.operations.map((o) => (o.id === id && o.type === 'add_block' ? { ...o, position } : o)) };
+        const next = {
+          ...d,
+          operations: d.operations.map((o) =>
+            o.id === id && o.type === 'add_block' ? { ...o, position } : o,
+          ),
+        };
         upsertChange(next);
         void s.source?.saveChange(next).catch(() => {});
       }
@@ -647,34 +732,54 @@ export const useDeck = create<DeckState>()((set, get) => {
       if (!d) return;
       const next = { ...d, title };
       upsertChange(next);
-      void get().source?.saveChange(next).catch(() => {});
+      void get()
+        .source?.saveChange(next)
+        .catch(() => {});
     },
     requestRemove(targetId, targetType, label, ownerId) {
       const mark = get().marks.get(targetId);
       const ops = draft()?.operations ?? [];
       const own = ops.find((o) => o.id === targetId);
-      if (own) return mutate((list) => list.filter((o) => o.id !== targetId && !(o.type === 'add_edge' && (o.from === targetId || o.to === targetId))));
+      if (own)
+        return mutate((list) =>
+          list.filter(
+            (o) =>
+              o.id !== targetId && !(o.type === 'add_edge' && (o.from === targetId || o.to === targetId)),
+          ),
+        );
       const sub = targetId.match(/^(.*):b(\d+)$/);
       if (sub) {
         const parent = ops.find((o) => o.id === sub[1]);
         if (parent && (parent.type === 'add_block' || parent.type === 'add_edge')) {
           const n = Number(sub[2]);
-          return mutate((list) => list.map((o) => (o.id === parent.id ? { ...parent, bullets: parent.bullets.filter((_, i) => i !== n) } : o)));
+          return mutate((list) =>
+            list.map((o) =>
+              o.id === parent.id ? { ...parent, bullets: parent.bullets.filter((_, i) => i !== n) } : o,
+            ),
+          );
         }
       }
       if (mark?.state === 'removed') return mutate((list) => list.filter((o) => o.id !== mark.opId));
-      mutate((list) => [...list, { id: freshId('op'), type: 'remove', targetId, targetType, ownerId, label }]);
+      mutate((list) => [
+        ...list,
+        { id: freshId('op'), type: 'remove', targetId, targetType, ownerId, label },
+      ]);
     },
     requestRename(targetId, name) {
       const clean = name.trim();
       if (!clean) return;
       const ops = draft()?.operations ?? [];
       const own = ops.find((o) => o.id === targetId && o.type === 'add_block');
-      if (own) return mutate((list) => list.map((o) => (o.id === targetId && o.type === 'add_block' ? { ...o, name: clean } : o)));
+      if (own)
+        return mutate((list) =>
+          list.map((o) => (o.id === targetId && o.type === 'add_block' ? { ...o, name: clean } : o)),
+        );
       const original = get().bundle?.snapshot.nodes.find((n) => n.id === targetId)?.name ?? '';
       mutate((list) => {
         const rest = list.filter((o) => !(o.type === 'rename' && o.targetId === targetId));
-        return clean === original ? rest : [...rest, { id: freshId('op'), type: 'rename', targetId, name: clean, before: original }];
+        return clean === original
+          ? rest
+          : [...rest, { id: freshId('op'), type: 'rename', targetId, name: clean, before: original }];
       });
     },
     setBullet(ownerId, bullet, text) {
@@ -682,19 +787,39 @@ export const useDeck = create<DeckState>()((set, get) => {
       if (!clean) return;
       const ops = draft()?.operations ?? [];
       if (ops.some((o) => o.id === bullet.id && o.type === 'add_behavior')) {
-        return mutate((list) => list.map((o) => (o.id === bullet.id && o.type === 'add_behavior' ? { ...o, text: clean } : o)));
+        return mutate((list) =>
+          list.map((o) => (o.id === bullet.id && o.type === 'add_behavior' ? { ...o, text: clean } : o)),
+        );
       }
       const sub = bullet.id.match(/^(.*):b(\d+)$/);
       const parent = sub ? ops.find((o) => o.id === sub[1]) : undefined;
       if (sub && parent && (parent.type === 'add_block' || parent.type === 'add_edge')) {
         const n = Number(sub[2]);
-        return mutate((list) => list.map((o) => (o.id === parent.id ? { ...parent, bullets: parent.bullets.map((b, i) => (i === n ? clean : b)) } : o)));
+        return mutate((list) =>
+          list.map((o) =>
+            o.id === parent.id
+              ? { ...parent, bullets: parent.bullets.map((b, i) => (i === n ? clean : b)) }
+              : o,
+          ),
+        );
       }
       const mark = get().marks.get(bullet.id);
       const before = mark?.before ?? bullet.text;
       mutate((list) => {
         const rest = list.filter((o) => !(o.type === 'set_behavior' && o.bulletId === bullet.id));
-        return clean === before ? rest : [...rest, { id: freshId('op'), type: 'set_behavior', targetId: ownerId, bulletId: bullet.id, text: clean, before }];
+        return clean === before
+          ? rest
+          : [
+              ...rest,
+              {
+                id: freshId('op'),
+                type: 'set_behavior',
+                targetId: ownerId,
+                bulletId: bullet.id,
+                text: clean,
+                before,
+              },
+            ];
       });
     },
     addBullet(targetId, text) {
@@ -703,7 +828,9 @@ export const useDeck = create<DeckState>()((set, get) => {
       const ops = draft()?.operations ?? [];
       const own = ops.find((o) => o.id === targetId);
       if (own && (own.type === 'add_block' || own.type === 'add_edge')) {
-        return mutate((list) => list.map((o) => (o.id === own.id ? { ...own, bullets: [...own.bullets, clean] } : o)));
+        return mutate((list) =>
+          list.map((o) => (o.id === own.id ? { ...own, bullets: [...own.bullets, clean] } : o)),
+        );
       }
       mutate((list) => [...list, { id: freshId('op'), type: 'add_behavior', targetId, text: clean }]);
     },
@@ -712,7 +839,13 @@ export const useDeck = create<DeckState>()((set, get) => {
       if (!s.bundle) return;
       const notes = {
         ...s.bundle.notes,
-        bullets: { ...s.bundle.notes.bullets, [ownerId]: [...(s.bundle.notes.bullets[ownerId] ?? []), { ...bullet, id: freshId('bullet'), origin: 'authored' as const }] },
+        bullets: {
+          ...s.bundle.notes.bullets,
+          [ownerId]: [
+            ...(s.bundle.notes.bullets[ownerId] ?? []),
+            { ...bullet, id: freshId('bullet'), origin: 'authored' as const },
+          ],
+        },
         dismissed: [...s.bundle.notes.dismissed, bullet.id],
       };
       set({ bundle: { ...s.bundle, notes } });
@@ -757,8 +890,13 @@ export const useDeck = create<DeckState>()((set, get) => {
       try {
         const change = await source.transition(id, action, body);
         upsertChange(change);
-        set({ activeChangeId: change.id, undoStack: action === 'submit' ? [] : get().undoStack, redoStack: [] });
-        if (action === 'accept' || action === 'reject' || action === 'revise') set({ review: null, showBefore: false });
+        set({
+          activeChangeId: change.id,
+          undoStack: action === 'submit' ? [] : get().undoStack,
+          redoStack: [],
+        });
+        if (action === 'accept' || action === 'reject' || action === 'revise')
+          set({ review: null, showBefore: false });
         rebuild();
       } catch (err) {
         get().toast(err instanceof Error ? err.message : String(err), true);
@@ -774,18 +912,38 @@ export const useDeck = create<DeckState>()((set, get) => {
     },
     async discardChange(id) {
       const s = get();
-      set({ changes: s.changes.filter((c) => c.id !== id), activeChangeId: s.activeChangeId === id ? null : s.activeChangeId });
+      set({
+        changes: s.changes.filter((c) => c.id !== id),
+        activeChangeId: s.activeChangeId === id ? null : s.activeChangeId,
+      });
       await s.source?.discardChange(id).catch(() => {});
       rebuild();
     },
     async enterReview(id) {
       try {
         const review = await get().source!.review(id);
-        set({ review, showBefore: false, activeChangeId: id, trayOpen: false, panelOpen: true, selectedId: null });
+        set({
+          review,
+          showBefore: false,
+          activeChangeId: id,
+          trayOpen: false,
+          panelOpen: true,
+          selectedId: null,
+        });
         rebuild();
         const changed = review.findings.flatMap((f) => f.targetIds);
         const index = get().index;
-        const blocks = [...new Set(changed.map((t) => index?.blockOf.get(t) ?? (index?.edgeById.get(t) ? index.blockOf.get(index.edgeById.get(t)!.from) : undefined)).filter((b): b is Id => Boolean(b)))];
+        const blocks = [
+          ...new Set(
+            changed
+              .map(
+                (t) =>
+                  index?.blockOf.get(t) ??
+                  (index?.edgeById.get(t) ? index.blockOf.get(index.edgeById.get(t)!.from) : undefined),
+              )
+              .filter((b): b is Id => Boolean(b)),
+          ),
+        ];
         if (blocks.length) setTimeout(() => camera.flyTo(blocks), 320);
       } catch (err) {
         get().toast(err instanceof Error ? err.message : String(err), true);

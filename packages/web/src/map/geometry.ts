@@ -70,7 +70,18 @@ export function route(a: Rect, b: Rect, sf: number, tf: number, scale: number, r
     const gap = Math.abs(ey - sy);
     const lane = ey - dir * Math.min(gap / 2, 18 * Math.min(scale, 2.5));
     const tip = ey - dir * hl * 0.7;
-    const d = Math.abs(ex - sx) < 1 ? `M${sx},${sy}L${ex},${tip}` : rounded([[sx, sy], [sx, lane], [ex, lane], [ex, tip]], r);
+    const d =
+      Math.abs(ex - sx) < 1
+        ? `M${sx},${sy}L${ex},${tip}`
+        : rounded(
+            [
+              [sx, sy],
+              [sx, lane],
+              [ex, lane],
+              [ex, tip],
+            ],
+            r,
+          );
     const head = `M${ex - hw},${ey - dir * hl}L${ex + hw},${ey - dir * hl}L${ex},${ey}Z`;
     // Labels sit on the last horizontal run, near the block they point at, and fan out
     // along it so arrows that arrive together do not stack their labels.
@@ -91,12 +102,36 @@ export function route(a: Rect, b: Rect, sf: number, tf: number, scale: number, r
   if ((ex - sx) * dir < 12) {
     // Overlapping boxes: a short hop around the outside.
     const out = Math.max(a.y + a.h, b.y + b.h) + 18 * scale;
-    const d = rounded([[a.x + a.w / 2, a.y + a.h], [a.x + a.w / 2, out], [b.x + b.w / 2, out], [b.x + b.w / 2, b.y + b.h + hl * 0.7]], r);
+    const d = rounded(
+      [
+        [a.x + a.w / 2, a.y + a.h],
+        [a.x + a.w / 2, out],
+        [b.x + b.w / 2, out],
+        [b.x + b.w / 2, b.y + b.h + hl * 0.7],
+      ],
+      r,
+    );
     const bx = b.x + b.w / 2;
-    return { d, head: `M${bx - hw},${b.y + b.h + hl}L${bx + hw},${b.y + b.h + hl}L${bx},${b.y + b.h}Z`, labelX: (a.x + a.w / 2 + bx) / 2, labelY: out };
+    return {
+      d,
+      head: `M${bx - hw},${b.y + b.h + hl}L${bx + hw},${b.y + b.h + hl}L${bx},${b.y + b.h}Z`,
+      labelX: (a.x + a.w / 2 + bx) / 2,
+      labelY: out,
+    };
   }
   const mid = (sx + ex) / 2;
-  const d = Math.abs(ey - sy) < 1 ? `M${sx},${sy}L${tip},${ey}` : rounded([[sx, sy], [mid, sy], [mid, ey], [tip, ey]], r);
+  const d =
+    Math.abs(ey - sy) < 1
+      ? `M${sx},${sy}L${tip},${ey}`
+      : rounded(
+          [
+            [sx, sy],
+            [mid, sy],
+            [mid, ey],
+            [tip, ey],
+          ],
+          r,
+        );
   return { d, head, labelX: mid, labelY: (sy + ey) / 2 };
 }
 

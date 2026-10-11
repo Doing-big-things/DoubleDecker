@@ -6,28 +6,34 @@ import path from 'node:path';
 import { type IdsFile, TypeScriptAdapter } from '@decker/adapter-typescript';
 import type { AgentWorker, Sandbox, WorkPackage } from '@decker/agent-gateway';
 import {
+  buildIndex,
   type Candidate,
   type Change,
   type ChangeOp,
   type CheckResult,
   type DeckNotes,
   type DeckSnapshot,
+  freshId,
   type Id,
   type Plan,
   type ReviewBundle,
+  renderDeckText,
   type ServerEvent,
   type TestRun,
   type TestStatus,
-  buildIndex,
-  freshId,
-  renderDeckText,
   withNotes,
 } from '@decker/deck-model';
 import type { CheckSpec, DeckDir, DeckSettings } from './deckdir.ts';
 import { CODE_ONLY, diffFiles, git, headCommit, isDirty, renames, tryGit, workingTreeHash } from './git.ts';
 import { readSecrets, runChecks } from './harness.ts';
 import { reconcile } from './reconcile.ts';
-import { ContainerSandbox, type ContainerSpec, HostSandbox, type RunResult, type SandboxKind } from './sandbox.ts';
+import {
+  ContainerSandbox,
+  type ContainerSpec,
+  HostSandbox,
+  type RunResult,
+  type SandboxKind,
+} from './sandbox.ts';
 
 export interface DeckHost {
   /** The deck root: the directory decker was started on. */
@@ -88,7 +94,8 @@ export class Coordinator {
   init(): void {
     for (const change of this.host.dir.changes()) {
       this.changes.set(change.id, change);
-      if (change.state !== 'planning' && change.state !== 'implementing' && change.state !== 'checking') continue;
+      if (change.state !== 'planning' && change.state !== 'implementing' && change.state !== 'checking')
+        continue;
       const step = change.state;
       const last = change.candidates.at(-1);
       if (last && (last.status === 'implementing' || last.status === 'checking')) {
@@ -96,7 +103,11 @@ export class Coordinator {
         last.error = 'The server stopped during this run.';
         this.dropWorktree(last);
       }
-      this.update(change, { state: 'failed', error: `The server stopped while ${step}. Nothing was merged. Try again.` }, 'interrupted');
+      this.update(
+        change,
+        { state: 'failed', error: `The server stopped while ${step}. Nothing was merged. Try again.` },
+        'interrupted',
+      );
     }
     if (this.host.gitRoot) tryGit(this.host.gitRoot, ['worktree', 'prune']);
   }
@@ -122,21 +133,37 @@ export class Coordinator {
   }
 
   private progress(change: Change, text: string): void {
-    for (const line of text.split('\n')) if (line.trim()) this.host.emit({ type: 'progress', changeId: change.id, text: line.slice(0, 400), at: now() });
+    for (const line of text.split('\n'))
+      if (line.trim())
+        this.host.emit({ type: 'progress', changeId: change.id, text: line.slice(0, 400), at: now() });
   }
 
   // ---- Drafts ----
 
   upsertDraft(id: Id, patch: { title?: string; operations?: ChangeOp[] }): Change {
     const existing = this.changes.get(id);
-    if (existing && existing.state !== 'draft') throw new StateError('Only a draft can be edited. Revise the change instead.');
-    const change: Change = existing ?? { id, title: 'Change', state: 'draft', operations: [], candidates: [], events: [{ at: now(), type: 'created' }], createdAt: now(), updatedAt: now() };
-    return this.update(change, { title: patch.title ?? change.title, operations: patch.operations ?? change.operations });
+    if (existing && existing.state !== 'draft')
+      throw new StateError('Only a draft can be edited. Revise the change instead.');
+    const change: Change = existing ?? {
+      id,
+      title: 'Change',
+      state: 'draft',
+      operations: [],
+      candidates: [],
+      events: [{ at: now(), type: 'created' }],
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    return this.update(change, {
+      title: patch.title ?? change.title,
+      operations: patch.operations ?? change.operations,
+    });
   }
 
   discard(id: Id): void {
     const change = this.get(id);
-    if (change.state !== 'draft' && change.state !== 'rejected' && change.state !== 'failed') throw new StateError('Reject the change before discarding it.');
+    if (change.state !== 'draft' && change.state !== 'rejected' && change.state !== 'failed')
+      throw new StateError('Reject the change before discarding it.');
     for (const c of change.candidates) this.dropWorktree(c);
     this.changes.delete(id);
     this.host.dir.removeChange(id);
@@ -144,7 +171,13 @@ export class Coordinator {
 
   // ---- Planning ----
 
-  private workPackage(change: Change, worktree: string, candidate: number, baseCommit: string, revise?: string): WorkPackage {
+  private workPackage(
+    change: Change,
+    worktree: string,
+    candidate: number,
+    baseCommit: string,
+    revise?: string,
+  ): WorkPackage {
     const index = buildIndex(withNotes(this.host.snapshot(), this.host.notes()));
     return {
       changeId: change.id,
@@ -152,7 +185,10 @@ export class Coordinator {
       candidate,
       worktree,
       baseCommit,
-      deckText: renderDeckText(index, { focus: change.operations.flatMap(opTargets), operations: change.operations }),
+      deckText: renderDeckText(index, {
+        focus: change.operations.flatMap(opTargets),
+        operations: change.operations,
+      }),
       operations: change.operations,
       plan: change.plan,
       revise,
@@ -162,7 +198,8 @@ export class Coordinator {
   }
 
   private requireLoop(): { gitRoot: string; worker: AgentWorker } {
-    if (!this.host.gitRoot) throw new StateError('Changes need a git repository: candidates are built in worktrees.');
+    if (!this.host.gitRoot)
+      throw new StateError('Changes need a git repository: candidates are built in worktrees.');
     if (!this.worker) throw new StateError('No agent worker is configured.');
     return { gitRoot: this.host.gitRoot, worker: this.worker };
   }
@@ -170,9 +207,11 @@ export class Coordinator {
   submit(id: Id): Change {
     const change = this.get(id);
     const { worker } = this.requireLoop();
-    if (change.state !== 'draft' && change.state !== 'failed') throw new StateError('This change was already submitted.');
+    if (change.state !== 'draft' && change.state !== 'failed')
+      throw new StateError('This change was already submitted.');
     if (change.operations.length === 0) throw new StateError('There is nothing to submit yet.');
-    if (isDirty(this.host.root)) throw new StateError('Commit your own changes first: a candidate is built from the last commit.');
+    if (isDirty(this.host.root))
+      throw new StateError('Commit your own changes first: a candidate is built from the last commit.');
     this.update(change, { state: 'planning', plan: undefined }, 'submitted');
     void this.plan(change, worker);
     return change;
@@ -181,36 +220,66 @@ export class Coordinator {
   private async plan(change: Change, worker: AgentWorker): Promise<void> {
     try {
       let plan: Plan | undefined;
-      for await (const ev of worker.plan(this.workPackage(change, this.host.root, 0, headCommit(this.host.root)))) {
+      for await (const ev of worker.plan(
+        this.workPackage(change, this.host.root, 0, headCommit(this.host.root)),
+      )) {
         if (ev.type === 'error') throw new Error(ev.text ?? 'Planning failed.');
         if (ev.type === 'plan') plan = ev.plan;
         else if (ev.text) this.progress(change, ev.text);
       }
       if (!plan) throw new Error('The planner returned no plan.');
-      this.update(change, { plan: { ...plan, limits: plan.limits ?? [], approved: false }, state: plan.questions.some((q) => !q.answer) ? 'needs_answer' : 'plan_ready' }, 'planned');
+      this.update(
+        change,
+        {
+          plan: { ...plan, limits: plan.limits ?? [], approved: false },
+          state: plan.questions.some((q) => !q.answer) ? 'needs_answer' : 'plan_ready',
+        },
+        'planned',
+      );
     } catch (err) {
-      this.update(change, { state: 'failed', error: err instanceof Error ? err.message : String(err) }, 'plan_failed');
+      this.update(
+        change,
+        { state: 'failed', error: err instanceof Error ? err.message : String(err) },
+        'plan_failed',
+      );
     }
   }
 
-  patchPlan(id: Id, patch: { requirements?: Plan['requirements']; answers?: Record<Id, string>; interpretation?: string; waive?: { requirementId: Id; note: string } }): Change {
+  patchPlan(
+    id: Id,
+    patch: {
+      requirements?: Plan['requirements'];
+      answers?: Record<Id, string>;
+      interpretation?: string;
+      waive?: { requirementId: Id; note: string };
+    },
+  ): Change {
     const change = this.get(id);
     if (!change.plan) throw new StateError('This change has no plan yet.');
     const plan: Plan = { ...change.plan };
     if (patch.waive) {
       if (!patch.waive.note.trim()) throw new StateError('A waiver needs a note.');
-      plan.requirements = plan.requirements.map((r) => (r.id === patch.waive!.requirementId ? { ...r, waived: patch.waive!.note.trim() } : r));
+      plan.requirements = plan.requirements.map((r) =>
+        r.id === patch.waive!.requirementId ? { ...r, waived: patch.waive!.note.trim() } : r,
+      );
       return this.update(change, { plan }, 'waived', patch.waive.note.trim());
     }
-    if (change.state !== 'plan_ready' && change.state !== 'needs_answer') throw new StateError('The plan is already approved.');
+    if (change.state !== 'plan_ready' && change.state !== 'needs_answer')
+      throw new StateError('The plan is already approved.');
     if (patch.interpretation !== undefined) plan.interpretation = patch.interpretation;
     if (patch.requirements) plan.requirements = patch.requirements.filter((r) => r.text.trim());
     if (patch.answers) {
-      plan.questions = plan.questions.map((q) => ({ ...q, answer: patch.answers![q.id]?.trim() || q.answer }));
+      plan.questions = plan.questions.map((q) => ({
+        ...q,
+        answer: patch.answers![q.id]?.trim() || q.answer,
+      }));
       // Decisions the engineer made are limits recorded on the change and shown on the arrow.
       plan.limits = plan.questions.filter((q) => q.answer).map((q) => `${q.text} ${q.answer}`);
     }
-    return this.update(change, { plan, state: plan.questions.some((q) => !q.answer) ? 'needs_answer' : 'plan_ready' });
+    return this.update(change, {
+      plan,
+      state: plan.questions.some((q) => !q.answer) ? 'needs_answer' : 'plan_ready',
+    });
   }
 
   // ---- Implementing and checking ----
@@ -218,8 +287,14 @@ export class Coordinator {
   approve(id: Id): Change {
     const change = this.get(id);
     const { worker } = this.requireLoop();
-    if (change.state !== 'plan_ready') throw new StateError(change.state === 'needs_answer' ? 'Answer the open questions first.' : 'There is no plan to approve.');
-    if (this.host.sandbox === 'none') throw new StateError('No sandbox is available. Install Docker or Podman, or start decker with --sandbox=host to run on this machine without isolation.');
+    if (change.state !== 'plan_ready')
+      throw new StateError(
+        change.state === 'needs_answer' ? 'Answer the open questions first.' : 'There is no plan to approve.',
+      );
+    if (this.host.sandbox === 'none')
+      throw new StateError(
+        'No sandbox is available. Install Docker or Podman, or start decker with --sandbox=host to run on this machine without isolation.',
+      );
     this.update(change, { plan: { ...change.plan!, approved: true }, state: 'implementing' }, 'approved');
     void this.candidate(change, worker);
     return change;
@@ -275,7 +350,12 @@ export class Coordinator {
   }
 
   private containerSpec(worktree: string): ContainerSpec {
-    return { cli: this.host.sandbox as 'docker' | 'podman', image: this.host.settings().image, mount: worktree, workdir: this.deckRootIn(worktree) };
+    return {
+      cli: this.host.sandbox as 'docker' | 'podman',
+      image: this.host.settings().image,
+      mount: worktree,
+      workdir: this.deckRootIn(worktree),
+    };
   }
 
   private async candidate(change: Change, worker: AgentWorker, comment?: string): Promise<void> {
@@ -283,7 +363,15 @@ export class Coordinator {
     const previous = change.candidates.filter((c) => c.commit).at(-1);
     const n = change.candidates.length + 1;
     const base = previous?.baseCommit ?? headCommit(gitRoot);
-    const candidate: Candidate = { n, branch: `deck/${change.id}/c${n}`, worktree: this.worktreePath(change, n), baseCommit: base, status: 'implementing', comment, checks: [] };
+    const candidate: Candidate = {
+      n,
+      branch: `deck/${change.id}/c${n}`,
+      worktree: this.worktreePath(change, n),
+      baseCommit: base,
+      status: 'implementing',
+      comment,
+      checks: [],
+    };
     change.candidates.push(candidate);
     this.update(change, {}, 'candidate', `candidate ${n}`);
     try {
@@ -320,8 +408,16 @@ export class Coordinator {
 
       // 3. Whatever diff is in the worktree is the result. The .deck folder is not the agent's to edit.
       git(candidate.worktree, ['add', '-A', ...CODE_ONLY]);
-      if (!git(candidate.worktree, ['diff', '--cached', '--name-only']).trim()) throw new Error('The agent finished without changing any code.');
-      git(candidate.worktree, [...IDENTITY, 'commit', '--quiet', '--no-verify', '-m', `deck: ${change.title} (candidate ${n})`]);
+      if (!git(candidate.worktree, ['diff', '--cached', '--name-only']).trim())
+        throw new Error('The agent finished without changing any code.');
+      git(candidate.worktree, [
+        ...IDENTITY,
+        'commit',
+        '--quiet',
+        '--no-verify',
+        '-m',
+        `deck: ${change.title} (candidate ${n})`,
+      ]);
       candidate.commit = git(candidate.worktree, ['rev-parse', 'HEAD']);
 
       await this.check(change, candidate);
@@ -340,12 +436,30 @@ export class Coordinator {
     this.update(change, { state: 'checking' }, 'checking');
     const root = this.deckRootIn(candidate.worktree);
     const settings = this.host.settings();
-    const adapter = new TypeScriptAdapter(root, { tsconfig: settings.tsconfig, testPatterns: settings.testPatterns, exclude: settings.exclude });
-    const extracted = adapter.extract({ commit: candidate.commit!, dirty: false, ids: this.host.ids(), renames: renames(root, candidate.baseCommit, candidate.commit) });
-    const run = await runChecks(root, settings.checks, extracted.snapshot.tests, (check, command) => this.exec(check, command, candidate.worktree), (text) => this.progress(change, text));
+    const adapter = new TypeScriptAdapter(root, {
+      tsconfig: settings.tsconfig,
+      testPatterns: settings.testPatterns,
+      exclude: settings.exclude,
+      name: path.basename(this.host.root),
+    });
+    const extracted = adapter.extract({
+      commit: candidate.commit!,
+      dirty: false,
+      ids: this.host.ids(),
+      renames: renames(root, candidate.baseCommit, candidate.commit),
+    });
+    const run = await runChecks(
+      root,
+      settings.checks,
+      extracted.snapshot.tests,
+      (check, command) => this.exec(check, command, candidate.worktree),
+      (text) => this.progress(change, text),
+    );
     candidate.checks = run.checks.map((c) => ({ ...c, output: c.output.slice(-4000) }));
     const stored: StoredCandidate = {
-      base: this.host.dir.readCache<StoredCandidate>(this.cacheName(change, candidate.n - 1))?.base ?? this.host.snapshot(),
+      base:
+        this.host.dir.readCache<StoredCandidate>(this.cacheName(change, candidate.n - 1))?.base ??
+        this.host.snapshot(),
       snapshot: extracted.snapshot,
       ids: extracted.ids,
       checks: run.checks,
@@ -364,22 +478,46 @@ export class Coordinator {
   }
 
   /** Where a check runs: a fresh container with the network off, or the host when the engineer opted in. */
-  private async exec(check: CheckSpec, command: string, worktree: string | null): Promise<RunResult | { skipped: string }> {
+  private async exec(
+    check: CheckSpec,
+    command: string,
+    worktree: string | null,
+  ): Promise<RunResult | { skipped: string }> {
     const cwd = worktree ? this.deckRootIn(worktree) : this.host.root;
     const secrets = readSecrets(this.host.root, check);
     if (secrets === null) return { skipped: 'Its credentials are not configured on this machine.' };
     if (this.host.sandbox === 'none') return { skipped: 'No sandbox is available.' };
     if (this.host.sandbox === 'host') return new HostSandbox(cwd, secrets).run(command);
     if (check.network?.length) return { skipped: 'It needs the network allow-list, which is not built yet.' };
-    return ContainerSandbox.check({ cli: this.host.sandbox, image: this.host.settings().image, mount: worktree ?? this.host.gitRoot ?? this.host.root, workdir: cwd }, command, secrets);
+    return ContainerSandbox.check(
+      {
+        cli: this.host.sandbox,
+        image: this.host.settings().image,
+        mount: worktree ?? this.host.gitRoot ?? this.host.root,
+        workdir: cwd,
+      },
+      command,
+      secrets,
+    );
   }
 
   /** Run the checks on the working tree, for the tests chips on the map. */
   async checkWorkingTree(): Promise<TestRun> {
     const snapshot = this.host.snapshot();
     const treeHash = workingTreeHash(this.host.root);
-    const run = await runChecks(this.host.root, this.host.settings().checks, snapshot.tests, (check, command) => this.exec(check, command, null));
-    const result: TestRun = { commit: snapshot.sourceCommit, treeHash, ranAt: now(), results: run.results, checks: run.checks.map((c) => ({ ...c, output: c.output.slice(-4000) })) };
+    const run = await runChecks(
+      this.host.root,
+      this.host.settings().checks,
+      snapshot.tests,
+      (check, command) => this.exec(check, command, null),
+    );
+    const result: TestRun = {
+      commit: snapshot.sourceCommit,
+      treeHash,
+      ranAt: now(),
+      results: run.results,
+      checks: run.checks.map((c) => ({ ...c, output: c.output.slice(-4000) })),
+    };
     this.host.recordRun(result);
     return result;
   }
@@ -389,9 +527,21 @@ export class Coordinator {
   review(id: Id): ReviewBundle {
     const change = this.get(id);
     const candidate = change.candidates.at(-1);
-    const stored = candidate ? this.host.dir.readCache<StoredCandidate>(this.cacheName(change, candidate.n)) : null;
-    if (!candidate || !stored || !candidate.commit) throw new StateError('This change has no candidate to review.');
-    const r = reconcile({ base: stored.base, candidate: stored.snapshot, operations: change.operations, plan: change.plan, checks: stored.checks, results: stored.results, failures: stored.failures, reverts: Boolean(change.reverts) });
+    const stored = candidate
+      ? this.host.dir.readCache<StoredCandidate>(this.cacheName(change, candidate.n))
+      : null;
+    if (!candidate || !stored || !candidate.commit)
+      throw new StateError('This change has no candidate to review.');
+    const r = reconcile({
+      base: stored.base,
+      candidate: stored.snapshot,
+      operations: change.operations,
+      plan: change.plan,
+      checks: stored.checks,
+      results: stored.results,
+      failures: stored.failures,
+      reverts: Boolean(change.reverts),
+    });
     return {
       changeId: change.id,
       candidate: candidate.n,
@@ -399,7 +549,13 @@ export class Coordinator {
       snapshot: stored.snapshot,
       findings: r.findings,
       checks: stored.checks,
-      testRun: { commit: candidate.commit, treeHash: stored.treeHash, ranAt: stored.ranAt, results: stored.results, checks: [] },
+      testRun: {
+        commit: candidate.commit,
+        treeHash: stored.treeHash,
+        ranAt: stored.ranAt,
+        results: stored.results,
+        checks: [],
+      },
       testDelta: r.testDelta,
       diff: diffFiles(this.host.root, candidate.baseCommit, candidate.commit),
       changedIds: r.changedIds,
@@ -415,7 +571,8 @@ export class Coordinator {
     const candidate = change.candidates.at(-1)!;
     const review = this.review(id);
     if (!review.canAccept) throw new StateError(`Accept is blocked. ${review.blockers.join(' ')}`);
-    if (isDirty(this.host.root)) throw new StateError('Commit or stash your own changes first, so the candidate can be merged cleanly.');
+    if (isDirty(this.host.root))
+      throw new StateError('Commit or stash your own changes first, so the candidate can be merged cleanly.');
 
     const head = headCommit(gitRoot);
     if (head !== candidate.baseCommit) {
@@ -424,24 +581,33 @@ export class Coordinator {
         git(candidate.worktree, [...IDENTITY, 'rebase', head]);
       } catch {
         tryGit(candidate.worktree, ['rebase', '--abort']);
-        throw new StateError('The base has moved and the candidate no longer applies cleanly. Revise it, or reject it.');
+        throw new StateError(
+          'The base has moved and the candidate no longer applies cleanly. Revise it, or reject it.',
+        );
       }
       candidate.baseCommit = head;
       candidate.commit = git(candidate.worktree, ['rev-parse', 'HEAD']);
       // The base snapshot for the next review is the map as it is now.
       this.host.dir.writeCache(this.cacheName(change, candidate.n - 1), { base: this.host.snapshot() });
       await this.check(change, candidate);
-      throw new StateError('The base had moved. The candidate was rebased and checked again: review it once more.');
+      throw new StateError(
+        'The base had moved. The candidate was rebased and checked again: review it once more.',
+      );
     }
 
     // Record what the engineer asked for, so it survives as authored intent on the map.
     const stored = this.host.dir.readCache<StoredCandidate>(this.cacheName(change, candidate.n))!;
     const notes = this.host.notes();
     const layout = this.host.dir.layout();
-    const targets = new Map(review.findings.filter((f) => f.opId && f.kind === 'implemented').map((f) => [f.opId!, f.targetIds]));
+    const targets = new Map(
+      review.findings.filter((f) => f.opId && f.kind === 'implemented').map((f) => [f.opId!, f.targetIds]),
+    );
     const author = (owner: Id, texts: string[]) => {
       if (texts.length === 0) return;
-      notes.bullets[owner] = [...(notes.bullets[owner] ?? []), ...texts.map((text) => ({ id: freshId('bullet'), text, origin: 'authored' as const }))];
+      notes.bullets[owner] = [
+        ...(notes.bullets[owner] ?? []),
+        ...texts.map((text) => ({ id: freshId('bullet'), text, origin: 'authored' as const })),
+      ];
     };
     for (const op of change.operations) {
       const real = targets.get(op.id)?.[0];
@@ -462,13 +628,33 @@ export class Coordinator {
     if (layout) this.host.dir.writeLayout(layout);
     // Record the acceptance and commit it with the rest of .deck before anyone is told,
     // so "Accepted" always means the working branch is complete.
-    Object.assign(change, { state: 'accepted', merged: { base: candidate.baseCommit, head: candidate.commit! }, error: undefined, updatedAt: now(), rev: (change.rev ?? 0) + 1 });
+    Object.assign(change, {
+      state: 'accepted',
+      merged: { base: candidate.baseCommit, head: candidate.commit! },
+      error: undefined,
+      updatedAt: now(),
+      rev: (change.rev ?? 0) + 1,
+    });
     change.events.push({ at: now(), type: 'accepted', detail: `candidate ${candidate.n}` });
     this.host.dir.writeChange(change);
     git(this.host.root, ['add', '--', '.deck']);
-    if (git(this.host.root, ['diff', '--cached', '--name-only']).trim()) git(this.host.root, [...IDENTITY, 'commit', '--quiet', '--no-verify', '-m', `deck: accept ${change.title}`]);
+    if (git(this.host.root, ['diff', '--cached', '--name-only']).trim())
+      git(this.host.root, [
+        ...IDENTITY,
+        'commit',
+        '--quiet',
+        '--no-verify',
+        '-m',
+        `deck: accept ${change.title}`,
+      ]);
     // The harness already ran the checks against exactly this code.
-    this.host.recordRun({ commit: headCommit(gitRoot), treeHash: workingTreeHash(this.host.root), ranAt: stored.ranAt, results: stored.results, checks: candidate.checks });
+    this.host.recordRun({
+      commit: headCommit(gitRoot),
+      treeHash: workingTreeHash(this.host.root),
+      ranAt: stored.ranAt,
+      results: stored.results,
+      checks: candidate.checks,
+    });
     for (const c of change.candidates) this.dropWorktree(c);
     await this.host.reload();
     this.host.emit({ type: 'change', change });
@@ -477,7 +663,8 @@ export class Coordinator {
 
   reject(id: Id): Change {
     const change = this.get(id);
-    if (change.state === 'accepted') throw new StateError('An accepted change cannot be rejected. Revert it instead.');
+    if (change.state === 'accepted')
+      throw new StateError('An accepted change cannot be rejected. Revert it instead.');
     for (const c of change.candidates) {
       if (c.status !== 'accepted') c.status = c.status === 'failed' ? 'failed' : 'rejected';
       this.dropWorktree(c);
@@ -489,7 +676,8 @@ export class Coordinator {
   revert(id: Id): Change {
     const original = this.get(id);
     const gitRoot = this.requireLoop().gitRoot;
-    if (original.state !== 'accepted' || !original.merged) throw new StateError('Only an accepted change can be reverted.');
+    if (original.state !== 'accepted' || !original.merged)
+      throw new StateError('Only an accepted change can be reverted.');
     if (this.host.sandbox === 'none') throw new StateError('No sandbox is available to check the revert.');
     const change: Change = {
       id: freshId('change'),
@@ -502,20 +690,39 @@ export class Coordinator {
       updatedAt: now(),
       reverts: original.id,
     };
-    const candidate: Candidate = { n: 1, branch: `deck/${change.id}/c1`, worktree: this.worktreePath(change, 1), baseCommit: headCommit(gitRoot), status: 'implementing', checks: [] };
+    const candidate: Candidate = {
+      n: 1,
+      branch: `deck/${change.id}/c1`,
+      worktree: this.worktreePath(change, 1),
+      baseCommit: headCommit(gitRoot),
+      status: 'implementing',
+      checks: [],
+    };
     change.candidates.push(candidate);
     this.update(change, {}, 'candidate', 'revert');
     void (async () => {
       try {
         git(gitRoot, ['worktree', 'add', '-b', candidate.branch, candidate.worktree, candidate.baseCommit]);
-        git(candidate.worktree, [...IDENTITY, 'revert', '--no-edit', `${original.merged!.base}..${original.merged!.head}`]);
+        git(candidate.worktree, [
+          ...IDENTITY,
+          'revert',
+          '--no-edit',
+          `${original.merged!.base}..${original.merged!.head}`,
+        ]);
         candidate.commit = git(candidate.worktree, ['rev-parse', 'HEAD']);
         await this.check(change, candidate);
       } catch (err) {
         tryGit(candidate.worktree, ['revert', '--abort']);
         candidate.status = 'failed';
         this.dropWorktree(candidate);
-        this.update(change, { state: 'failed', error: `The revert did not apply cleanly. ${err instanceof Error ? err.message.split('\n')[0] : ''}` }, 'revert_failed');
+        this.update(
+          change,
+          {
+            state: 'failed',
+            error: `The revert did not apply cleanly. ${err instanceof Error ? err.message.split('\n')[0] : ''}`,
+          },
+          'revert_failed',
+        );
       }
     })();
     return change;

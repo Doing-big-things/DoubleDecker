@@ -54,14 +54,16 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   await service.init(options);
 
   let port = options.port ?? 4747;
-  const allowed = () => new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...(options.allowOrigins ?? [])]);
+  const allowed = () =>
+    new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...(options.allowOrigins ?? [])]);
   const app = new Hono();
 
   app.use('/api/*', async (c, next) => {
     const origin = c.req.header('origin');
     if (origin && !allowed().has(origin)) return c.json({ error: 'This origin may not use the deck.' }, 403);
     const header = c.req.header('authorization') ?? '';
-    if (!header.startsWith('Bearer ') || !same(header.slice(7), token)) return c.json({ error: 'A session token is required.' }, 401);
+    if (!header.startsWith('Bearer ') || !same(header.slice(7), token))
+      return c.json({ error: 'A session token is required.' }, 401);
     await next();
   });
 
@@ -116,7 +118,8 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   });
 
   app.post('/api/checks', (c) => {
-    if (service.sandbox === 'none') return c.json({ error: 'Running checks needs Docker or Podman, or --sandbox=host.' }, 409);
+    if (service.sandbox === 'none')
+      return c.json({ error: 'Running checks needs Docker or Podman, or --sandbox=host.' }, 409);
     void service.runChecks().catch(() => {});
     return c.json({ ok: true });
   });
@@ -142,7 +145,9 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   });
   app.patch('/api/changes/:id', async (c) => {
     try {
-      return c.json(service.coordinator.upsertDraft(c.req.param('id'), changePatchSchema.parse(await body(c))));
+      return c.json(
+        service.coordinator.upsertDraft(c.req.param('id'), changePatchSchema.parse(await body(c))),
+      );
     } catch (err) {
       return fail(c, err);
     }
@@ -202,8 +207,11 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
     let file = path.resolve(WEB_DIST, `.${decodeURIComponent(url.pathname)}`);
     if (!file.startsWith(WEB_DIST)) return c.text('Not found', 404);
     if (!existsSync(file) || statSync(file).isDirectory()) file = path.join(WEB_DIST, 'index.html');
-    if (!existsSync(file)) return c.text('The web app is not built. Run "npm run build" in the Double Decker repository.', 503);
-    const headers: Record<string, string> = { 'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream' };
+    if (!existsSync(file))
+      return c.text('The web app is not built. Run "npm run build" in the Double Decker repository.', 503);
+    const headers: Record<string, string> = {
+      'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream',
+    };
     if (file.endsWith('index.html')) headers['cache-control'] = 'no-store';
     return c.body(readFileSync(file), 200, headers);
   });
@@ -227,7 +235,9 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   const sockets = new WebSocketServer({ noServer: true });
   server.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
-    const protocols = String(req.headers['sec-websocket-protocol'] ?? '').split(',').map((p) => p.trim());
+    const protocols = String(req.headers['sec-websocket-protocol'] ?? '')
+      .split(',')
+      .map((p) => p.trim());
     const offered = protocols.find((p) => p.startsWith('t.'))?.slice(2) ?? '';
     const origin = req.headers.origin;
     if (url.pathname !== '/api/events' || !same(offered, token) || (origin && !allowed().has(origin))) {

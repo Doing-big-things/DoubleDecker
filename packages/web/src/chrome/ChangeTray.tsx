@@ -1,5 +1,14 @@
 // The change tray (spec §3.8, §6.1): pending operations, then the lifecycle of each change.
-import { type Change, type ChangeOp, type Id, type Plan, buildIndex, describeOp, renderDeckText, withNotes } from '@decker/deck-model';
+import {
+  buildIndex,
+  type Change,
+  type ChangeOp,
+  describeOp,
+  type Id,
+  type Plan,
+  renderDeckText,
+  withNotes,
+} from '@decker/deck-model';
 import { FileText, Send, Trash2, Undo2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { camera } from '../map/camera';
@@ -18,7 +27,14 @@ const STATE_LABEL: Record<Change['state'], string> = {
   failed: 'Failed',
 };
 
-const OP_GLYPH: Record<ChangeOp['type'], string> = { set_behavior: '✎', add_behavior: '+', add_edge: '→', add_block: '▢', rename: 'Aa', remove: '−' };
+const OP_GLYPH: Record<ChangeOp['type'], string> = {
+  set_behavior: '✎',
+  add_behavior: '+',
+  add_edge: '→',
+  add_block: '▢',
+  rename: 'Aa',
+  remove: '−',
+};
 
 function targetOf(op: ChangeOp): Id[] {
   switch (op.type) {
@@ -33,7 +49,9 @@ function targetOf(op: ChangeOp): Id[] {
 
 function PlanView({ change, plan }: { change: Change; plan: Plan }) {
   const [reqs, setReqs] = useState(plan.requirements);
-  const [answers, setAnswers] = useState<Record<Id, string>>(Object.fromEntries(plan.questions.map((q) => [q.id, q.answer ?? ''])));
+  const [answers, setAnswers] = useState<Record<Id, string>>(
+    Object.fromEntries(plan.questions.map((q) => [q.id, q.answer ?? ''])),
+  );
   const editable = change.state === 'plan_ready' || change.state === 'needs_answer';
   const unanswered = plan.questions.some((q) => !answers[q.id]?.trim());
   const st = useDeck.getState;
@@ -49,11 +67,21 @@ function PlanView({ change, plan }: { change: Change; plan: Plan }) {
           <span style={{ color: 'var(--faint)', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span>
           <span className="dd-row-main">
             {editable ? (
-              <input className="dd-input" value={r.text} onChange={(e) => setReqs(reqs.map((x) => (x.id === r.id ? { ...x, text: e.target.value } : x)))} />
+              <input
+                className="dd-input"
+                value={r.text}
+                onChange={(e) =>
+                  setReqs(reqs.map((x) => (x.id === r.id ? { ...x, text: e.target.value } : x)))
+                }
+              />
             ) : (
               r.text
             )}
-            {r.test ? <span className="dd-row-sub">checked by the test “{r.test}”</span> : <span className="dd-row-sub">no test proposed</span>}
+            {r.test ? (
+              <span className="dd-row-sub">checked by the test “{r.test}”</span>
+            ) : (
+              <span className="dd-row-sub">no test proposed</span>
+            )}
           </span>
         </div>
       ))}
@@ -66,13 +94,23 @@ function PlanView({ change, plan }: { change: Change; plan: Plan }) {
               {q.options?.length ? (
                 <div className="dd-seg" style={{ marginBottom: 4 }}>
                   {q.options.map((o) => (
-                    <button type="button" key={o} aria-pressed={answers[q.id] === o} onClick={() => setAnswers({ ...answers, [q.id]: o })}>
+                    <button
+                      type="button"
+                      key={o}
+                      aria-pressed={answers[q.id] === o}
+                      onClick={() => setAnswers({ ...answers, [q.id]: o })}
+                    >
                       {o}
                     </button>
                   ))}
                 </div>
               ) : null}
-              <input className="dd-input" placeholder="Your answer" value={answers[q.id] ?? ''} onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })} />
+              <input
+                className="dd-input"
+                placeholder="Your answer"
+                value={answers[q.id] ?? ''}
+                onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+              />
             </>
           ) : (
             <div className="dd-row-sub">{q.answer || 'not answered'}</div>
@@ -84,7 +122,9 @@ function PlanView({ change, plan }: { change: Change; plan: Plan }) {
           <div className="dd-h">Accepted limits</div>
           {plan.limits.map((l) => (
             <div className="dd-row" key={l}>
-              <span className="dd-row-main" style={{ color: 'var(--muted)' }}>{l}</span>
+              <span className="dd-row-main" style={{ color: 'var(--muted)' }}>
+                {l}
+              </span>
             </div>
           ))}
         </>
@@ -92,7 +132,9 @@ function PlanView({ change, plan }: { change: Change; plan: Plan }) {
       {plan.files.length ? (
         <>
           <div className="dd-h">Expected to touch</div>
-          <div className="mono" style={{ fontSize: 11.5, color: 'var(--muted)' }}>{plan.files.join('\n')}</div>
+          <div className="mono" style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+            {plan.files.join('\n')}
+          </div>
         </>
       ) : null}
       {editable ? (
@@ -101,9 +143,17 @@ function PlanView({ change, plan }: { change: Change; plan: Plan }) {
             type="button"
             className="dd-btn is-primary"
             disabled={unanswered}
-            title={unanswered ? 'Answer every question first' : 'Approve this plan. It becomes the agreed contract.'}
+            title={
+              unanswered
+                ? 'Answer every question first'
+                : 'Approve this plan. It becomes the agreed contract.'
+            }
             data-testid="approve"
-            onClick={() => void st().patchPlan(change.id, { requirements: reqs, answers }).then(() => st().transition(change.id, 'approve'))}
+            onClick={() =>
+              void st()
+                .patchPlan(change.id, { requirements: reqs, answers })
+                .then(() => st().transition(change.id, 'approve'))
+            }
           >
             Approve plan
           </button>
@@ -124,7 +174,10 @@ function ChangeCard({ change }: { change: Change }) {
   const text = useMemo(() => {
     if (!asText || !bundle) return '';
     const base = buildIndex(withNotes(bundle.snapshot, bundle.notes));
-    return renderDeckText(base, { focus: change.operations.flatMap(targetOf), operations: change.operations });
+    return renderDeckText(base, {
+      focus: change.operations.flatMap(targetOf),
+      operations: change.operations,
+    });
   }, [asText, bundle, change.operations]);
   if (!index) return null;
   const draft = change.state === 'draft';
@@ -135,7 +188,14 @@ function ChangeCard({ change }: { change: Change }) {
     <section data-testid="change" data-state={change.state} style={{ marginBottom: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
         {draft ? (
-          <input className="dd-input" style={{ fontWeight: 600 }} value={change.title} onChange={(e) => st().setDraftTitle(e.target.value)} aria-label="Change title" data-testid="change-title" />
+          <input
+            className="dd-input"
+            style={{ fontWeight: 600 }}
+            value={change.title}
+            onChange={(e) => st().setDraftTitle(e.target.value)}
+            aria-label="Change title"
+            data-testid="change-title"
+          />
         ) : (
           <b style={{ flex: 1, minWidth: 0, fontSize: 13 }}>{change.title}</b>
         )}
@@ -148,8 +208,15 @@ function ChangeCard({ change }: { change: Change }) {
       <ul className="dd-oplist">
         {change.operations.map((op) => (
           <li key={op.id} data-testid="op" data-type={op.type}>
-            <span className="mono" style={{ width: 16, textAlign: 'center', color: 'var(--requested)' }}>{OP_GLYPH[op.type]}</span>
-            <button type="button" className="t" title="Show on the map" onClick={() => camera.flyTo(targetOf(op).map((id) => index.blockOf.get(id) ?? id))}>
+            <span className="mono" style={{ width: 16, textAlign: 'center', color: 'var(--requested)' }}>
+              {OP_GLYPH[op.type]}
+            </span>
+            <button
+              type="button"
+              className="t"
+              title="Show on the map"
+              onClick={() => camera.flyTo(targetOf(op).map((id) => index.blockOf.get(id) ?? id))}
+            >
               {describeOp(index, op, change.operations)}
               {op.type === 'add_edge' || op.type === 'add_block'
                 ? op.bullets.map((b, i) => (
@@ -160,7 +227,12 @@ function ChangeCard({ change }: { change: Change }) {
                 : null}
             </button>
             {draft ? (
-              <button type="button" className="dd-mini" aria-label="Remove this operation" onClick={() => st().removeOp(op.id)}>
+              <button
+                type="button"
+                className="dd-mini"
+                aria-label="Remove this operation"
+                onClick={() => st().removeOp(op.id)}
+              >
                 <X size={12} />
               </button>
             ) : null}
@@ -168,9 +240,19 @@ function ChangeCard({ change }: { change: Change }) {
         ))}
       </ul>
 
-      {asText ? <pre className="dd-progress" style={{ maxHeight: 260 }} data-testid="deck-text">{text}</pre> : null}
-      {change.plan && !draft ? <PlanView change={change} plan={change.plan} key={`${change.id}:${change.state}`} /> : null}
-      {progress?.length && isBusy(change) ? <div className="dd-progress" data-testid="progress">{progress.slice(-30).join('\n')}</div> : null}
+      {asText ? (
+        <pre className="dd-progress" style={{ maxHeight: 260 }} data-testid="deck-text">
+          {text}
+        </pre>
+      ) : null}
+      {change.plan && !draft ? (
+        <PlanView change={change} plan={change.plan} key={`${change.id}:${change.state}`} />
+      ) : null}
+      {progress?.length && isBusy(change) ? (
+        <div className="dd-progress" data-testid="progress">
+          {progress.slice(-30).join('\n')}
+        </div>
+      ) : null}
       {change.error ? (
         <div className="dd-note" style={{ borderColor: 'var(--contradicted)' }}>
           {change.error}
@@ -184,7 +266,13 @@ function ChangeCard({ change }: { change: Change }) {
       ) : null}
 
       <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-        <button type="button" className={`dd-btn${asText ? ' is-on' : ''}`} onClick={() => setAsText(!asText)} data-testid="as-text" title="The change as the task description an agent receives">
+        <button
+          type="button"
+          className={`dd-btn${asText ? ' is-on' : ''}`}
+          onClick={() => setAsText(!asText)}
+          data-testid="as-text"
+          title="The change as the task description an agent receives"
+        >
           <FileText size={13} /> As a task
         </button>
         {draft ? (
@@ -193,34 +281,65 @@ function ChangeCard({ change }: { change: Change }) {
               type="button"
               className="dd-btn is-primary"
               disabled={!canSubmit}
-              title={canSubmit ? 'Send this change to a planning agent' : mode === 'server' ? 'No agent worker is configured' : 'This map is a fixture. Run "decker <path-to-repo>" to send changes to an agent.'}
+              title={
+                canSubmit
+                  ? 'Send this change to a planning agent'
+                  : mode === 'server'
+                    ? 'No agent worker is configured'
+                    : 'This map is a fixture. Run "decker <path-to-repo>" to send changes to an agent.'
+              }
               data-testid="submit"
               onClick={() => void st().transition(change.id, 'submit')}
             >
               <Send size={13} /> Submit
             </button>
-            <button type="button" className="dd-btn is-ghost" onClick={() => void st().discardChange(change.id)} data-testid="discard">
+            <button
+              type="button"
+              className="dd-btn is-ghost"
+              onClick={() => void st().discardChange(change.id)}
+              data-testid="discard"
+            >
               <Trash2 size={13} /> Discard
             </button>
           </>
         ) : null}
         {change.state === 'in_review' ? (
-          <button type="button" className="dd-btn is-primary" data-testid="open-review" onClick={() => void st().enterReview(change.id)}>
+          <button
+            type="button"
+            className="dd-btn is-primary"
+            data-testid="open-review"
+            onClick={() => void st().enterReview(change.id)}
+          >
             Review candidate {candidate?.n}
           </button>
         ) : null}
         {change.state === 'failed' ? (
           <>
-            <button type="button" className="dd-btn" data-testid="retry" onClick={() => void st().transition(change.id, 'retry')}>
+            <button
+              type="button"
+              className="dd-btn"
+              data-testid="retry"
+              onClick={() => void st().transition(change.id, 'retry')}
+            >
               Try again
             </button>
-            <button type="button" className="dd-btn is-ghost" onClick={() => void st().transition(change.id, 'reject')}>
+            <button
+              type="button"
+              className="dd-btn is-ghost"
+              onClick={() => void st().transition(change.id, 'reject')}
+            >
               Reject
             </button>
           </>
         ) : null}
         {change.state === 'accepted' && !change.reverts ? (
-          <button type="button" className="dd-btn is-ghost" data-testid="revert" title="Create a candidate that undoes this change, for review" onClick={() => void st().transition(change.id, 'revert')}>
+          <button
+            type="button"
+            className="dd-btn is-ghost"
+            data-testid="revert"
+            title="Create a candidate that undoes this change, for review"
+            onClick={() => void st().transition(change.id, 'revert')}
+          >
             <Undo2 size={13} /> Revert
           </button>
         ) : null}
@@ -236,22 +355,38 @@ export function ChangeTray() {
   if (!open) return null;
   const st = useDeck.getState;
   const active = changes.filter(isOpen);
-  const done = changes.filter((c) => !isOpen(c)).slice(-4).reverse();
+  const done = changes
+    .filter((c) => !isOpen(c))
+    .slice(-4)
+    .reverse();
   return (
     <div className="dd-tray" data-testid="tray" role="dialog" aria-label="Changes">
       <div className="dd-tray-head">
         <b style={{ flex: 1 }}>Changes</b>
-        <button type="button" className="dd-btn is-ghost" disabled={!canUndo} onClick={() => st().undo()} title="Undo  (Ctrl+Z)" data-testid="undo">
+        <button
+          type="button"
+          className="dd-btn is-ghost"
+          disabled={!canUndo}
+          onClick={() => st().undo()}
+          title="Undo  (Ctrl+Z)"
+          data-testid="undo"
+        >
           <Undo2 size={13} /> Undo
         </button>
-        <button type="button" className="dd-icon-btn" aria-label="Close" onClick={() => st().set({ trayOpen: false })}>
+        <button
+          type="button"
+          className="dd-icon-btn"
+          aria-label="Close"
+          onClick={() => st().set({ trayOpen: false })}
+        >
           <X size={15} />
         </button>
       </div>
       <div className="dd-tray-body">
         {active.length === 0 && done.length === 0 ? (
           <div className="dd-empty">
-            Nothing pending. Edit the map to request a change: click a bullet and type, drag from one block to another, or press N for a new block.
+            Nothing pending. Edit the map to request a change: click a bullet and type, drag from one block to
+            another, or press N for a new block.
           </div>
         ) : null}
         {active.map((c) => (

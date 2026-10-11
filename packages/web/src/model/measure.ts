@@ -2,15 +2,15 @@
 // has to measure the DOM, and a block's size is a pure function of its content and state.
 import {
   type CardBullet,
+  cardBullets,
+  childrenOfKind,
   type DeckIndex,
   type DeckNode,
   type DeckTest,
   type Id,
-  type TestRun,
-  cardBullets,
-  childrenOfKind,
   isInternal,
   operationsOf,
+  type TestRun,
 } from '@decker/deck-model';
 
 export const BLOCK_W = 280;
@@ -38,11 +38,21 @@ export interface SizeState {
 export function collapsedHeight(index: DeckIndex, id: Id): number {
   const block = index.byId.get(id);
   const n = cardBullets(index, id).length;
-  return FRAME + TITLE + (block?.summary ? SUMMARY : 0) + (n ? GAP + Math.min(n, MAX_BULLETS) * ROW + (n > MAX_BULLETS ? ROW : 0) : 0);
+  return (
+    FRAME +
+    TITLE +
+    (block?.summary ? SUMMARY : 0) +
+    (n ? GAP + Math.min(n, MAX_BULLETS) * ROW + (n > MAX_BULLETS ? ROW : 0) : 0)
+  );
 }
 
 /** How many bullets fit when card text is scaled up to stay legible (text scale > 1). */
-export function fitBullets(index: DeckIndex, id: Id, ts: number, bullets: CardBullet[]): { summary: boolean; shown: number; more: number } {
+export function fitBullets(
+  index: DeckIndex,
+  id: Id,
+  ts: number,
+  bullets: CardBullet[],
+): { summary: boolean; shown: number; more: number } {
   const block = index.byId.get(id);
   const inner = collapsedHeight(index, id) - FRAME;
   let left = inner - TITLE * ts;
@@ -63,7 +73,11 @@ export type DrawerRow =
   | { t: 'more'; n: number; what: 'tests' | 'operations' };
 
 /** Tests grouped by the operation they call. Failing tests come first. */
-export function testGroups(index: DeckIndex, blockId: Id, run: TestRun | null): { id: Id; label: string; tests: DeckTest[] }[] {
+export function testGroups(
+  index: DeckIndex,
+  blockId: Id,
+  run: TestRun | null,
+): { id: Id; label: string; tests: DeckTest[] }[] {
   const rank = (t: DeckTest) => {
     const s = run?.results[t.id];
     return s === 'failed' ? 0 : s === 'skipped' ? 2 : 1;
@@ -71,7 +85,8 @@ export function testGroups(index: DeckIndex, blockId: Id, run: TestRun | null): 
   const groups: { id: Id; label: string; tests: DeckTest[] }[] = [];
   for (const op of operationsOf(index, blockId)) {
     const tests = index.testsOf.get(op.id);
-    if (tests?.length) groups.push({ id: op.id, label: op.name, tests: [...tests].sort((a, b) => rank(a) - rank(b)) });
+    if (tests?.length)
+      groups.push({ id: op.id, label: op.name, tests: [...tests].sort((a, b) => rank(a) - rank(b)) });
   }
   const loose = (index.testsOf.get(blockId) ?? []).filter((t) => t.targets.some((x) => x.id === blockId));
   if (loose.length) groups.push({ id: blockId, label: 'whole block', tests: loose });
@@ -100,7 +115,8 @@ export function drawerRows(index: DeckIndex, blockId: Id, run: TestRun | null): 
     const hidden = g.tests.length - take[i]!;
     if (hidden > 0 && take[i]! > 0) rows.push({ t: 'more', n: hidden, what: 'tests' });
   });
-  if (groups.length > shownGroups.length) rows.push({ t: 'more', n: groups.length - shownGroups.length, what: 'operations' });
+  if (groups.length > shownGroups.length)
+    rows.push({ t: 'more', n: groups.length - shownGroups.length, what: 'operations' });
   return rows;
 }
 

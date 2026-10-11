@@ -66,7 +66,9 @@ export function workingTreeHash(dir: string): string {
     // An empty scratch index, so the tree holds exactly the code under `dir` and nothing else.
     const env = { GIT_INDEX_FILE: index };
     git(dir, ['add', '-A', ...CODE_ONLY], env);
-    return createHash('sha1').update(git(dir, ['write-tree'], env)).digest('hex');
+    return createHash('sha1')
+      .update(git(dir, ['write-tree'], env))
+      .digest('hex');
   } catch {
     return `unknown-${Date.now()}`;
   } finally {
@@ -124,8 +126,18 @@ export function diffFiles(dir: string, from: string, to: string): DiffFile[] {
     const m = header.match(/ b\/(.+)$/);
     const body = chunk.slice(chunk.indexOf('\n') + 1);
     const hunk = body.indexOf('@@');
-    const status = /^new file mode/m.test(body) ? 'added' : /^deleted file mode/m.test(body) ? 'deleted' : /^rename from/m.test(body) ? 'renamed' : 'modified';
-    files.push({ path: m ? m[1]! : header, status, patch: hunk >= 0 ? body.slice(hunk).replace(/\n$/, '') : '' });
+    const status = /^new file mode/m.test(body)
+      ? 'added'
+      : /^deleted file mode/m.test(body)
+        ? 'deleted'
+        : /^rename from/m.test(body)
+          ? 'renamed'
+          : 'modified';
+    files.push({
+      path: m ? m[1]! : header,
+      status,
+      patch: hunk >= 0 ? body.slice(hunk).replace(/\n$/, '') : '',
+    });
   }
   void prefix;
   return files;

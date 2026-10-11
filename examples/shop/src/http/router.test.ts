@@ -34,8 +34,14 @@ describe('the shop over HTTP', () => {
     const { router } = createShop();
     router.dispatch('POST', '/products', { sku: 'mug', name: 'Mug', priceCents: 1200 });
     router.dispatch('POST', '/stock/mug', { units: 4 });
-    expect(router.dispatch('GET', '/products/mug', undefined).body).toMatchObject({ sku: 'mug', available: 4 });
-    const placed = router.dispatch('POST', '/orders', { customer: 'ada', cart: { items: [{ sku: 'mug', quantity: 1 }] } });
+    expect(router.dispatch('GET', '/products/mug', undefined).body).toMatchObject({
+      sku: 'mug',
+      available: 4,
+    });
+    const placed = router.dispatch('POST', '/orders', {
+      customer: 'ada',
+      cart: { items: [{ sku: 'mug', quantity: 1 }] },
+    });
     expect(placed.status).toBe(200);
   });
 

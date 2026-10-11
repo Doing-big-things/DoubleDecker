@@ -1,7 +1,7 @@
 // A worker that replays stored plans and candidates. It makes the change loop
 // deterministic: the flawed first candidate of the demo is stored, so detecting it
 // never depends on an agent making the mistake (spec §9.1).
-import { cpSync, existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { AgentEvent, ChangeOp, Plan } from '@decker/deck-model';
 import type { AgentWorker, Sandbox, WorkPackage } from './types.ts';
@@ -54,10 +54,16 @@ export class ScriptedWorker implements AgentWorker {
   async *plan(pkg: WorkPackage): AsyncIterable<AgentEvent> {
     const scenario = this.pick(pkg);
     if (!scenario) {
-      yield { type: 'error', text: 'The scripted worker has no stored scenario for this change. Configure the Claude worker to plan arbitrary changes.' };
+      yield {
+        type: 'error',
+        text: 'The scripted worker has no stored scenario for this change. Configure the Claude worker to plan arbitrary changes.',
+      };
       return;
     }
-    yield { type: 'text', text: `Reading the deck around ${pkg.operations.length} operation${pkg.operations.length === 1 ? '' : 's'}.` };
+    yield {
+      type: 'text',
+      text: `Reading the deck around ${pkg.operations.length} operation${pkg.operations.length === 1 ? '' : 's'}.`,
+    };
     yield { type: 'plan', plan: { ...scenario.plan, limits: scenario.plan.limits ?? [], approved: false } };
     yield { type: 'done' };
   }
@@ -90,10 +96,18 @@ export class ScriptedWorker implements AgentWorker {
     // Small candidates are stored as edits: find and replace, or append.
     const edits = path.join(source, 'edits.json');
     if (existsSync(edits)) {
-      for (const edit of JSON.parse(readFileSync(edits, 'utf8')) as { file: string; find?: string; replace?: string; append?: string }[]) {
+      for (const edit of JSON.parse(readFileSync(edits, 'utf8')) as {
+        file: string;
+        find?: string;
+        replace?: string;
+        append?: string;
+      }[]) {
         const target = path.resolve(pkg.worktree, edit.file);
         if (!target.startsWith(path.resolve(pkg.worktree) + path.sep) || !existsSync(target)) {
-          yield { type: 'error', text: `The stored candidate edits ${edit.file}, which is not in the worktree.` };
+          yield {
+            type: 'error',
+            text: `The stored candidate edits ${edit.file}, which is not in the worktree.`,
+          };
           return;
         }
         let text = readFileSync(target, 'utf8').replace(/\r\n/g, '\n');
@@ -110,7 +124,9 @@ export class ScriptedWorker implements AgentWorker {
       }
     }
     // An agent runs its commands through the sandbox and nowhere else.
-    const command = existsSync(path.join(source, 'command.txt')) ? readFileSync(path.join(source, 'command.txt'), 'utf8').trim() : '';
+    const command = existsSync(path.join(source, 'command.txt'))
+      ? readFileSync(path.join(source, 'command.txt'), 'utf8').trim()
+      : '';
     if (command) {
       const result = await sandbox.run(command);
       yield { type: 'tool', text: `$ ${command}  (exit ${result.exitCode})` };

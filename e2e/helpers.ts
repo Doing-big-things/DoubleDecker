@@ -1,10 +1,12 @@
-import { type Locator, type Page, expect } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 export type Level = 'system' | 'architecture' | 'blocks';
 
 export const canvas = (page: Page): Locator => page.getByTestId('canvas');
-export const block = (page: Page, name: string): Locator => page.locator(`[data-testid="block"][data-name="${name}"]`);
-export const arrow = (page: Page, from: string, to: string): Locator => page.locator(`[data-testid="arrow"][data-from="${from}"][data-to="${to}"]`);
+export const block = (page: Page, name: string): Locator =>
+  page.locator(`[data-testid="block"][data-name="${name}"]`);
+export const arrow = (page: Page, from: string, to: string): Locator =>
+  page.locator(`[data-testid="arrow"][data-from="${from}"][data-to="${to}"]`);
 
 export async function ready(page: Page): Promise<void> {
   await page.waitForSelector('[data-testid="app"][data-status="ready"]', { timeout: 30_000 });
@@ -18,7 +20,8 @@ export async function openFixture(page: Page, name = 'shop'): Promise<void> {
   await ready(page);
 }
 
-export const zoom = (page: Page): Promise<number> => page.evaluate(() => window.__decker.camera.viewport().zoom);
+export const zoom = (page: Page): Promise<number> =>
+  page.evaluate(() => window.__decker.camera.viewport().zoom);
 
 /** Zoom with the mouse wheel, at a point, until the map reaches a level. */
 export async function wheelTo(page: Page, level: Level, at?: { x: number; y: number }): Promise<void> {
@@ -83,7 +86,10 @@ export async function smallText(page: Page): Promise<string[]> {
 }
 
 /** Frame times while an action runs, as the 95th percentile in frames per second. */
-export async function measureFps(page: Page, action: () => Promise<void>): Promise<{ p95: number; median: number; frames: number }> {
+export async function measureFps(
+  page: Page,
+  action: () => Promise<void>,
+): Promise<{ p95: number; median: number; frames: number }> {
   await page.evaluate(() => {
     const w = window as unknown as { __frames: number[]; __raf: number };
     w.__frames = [];

@@ -1,6 +1,6 @@
 import type { Catalog } from '../catalog';
 import { priceOf } from '../catalog/products';
-import { type Money, add, money, multiply } from '../shared/money';
+import { add, type Money, money, multiply } from '../shared/money';
 import type { LineItem } from '../shared/types';
 import type { Cart } from './cart';
 

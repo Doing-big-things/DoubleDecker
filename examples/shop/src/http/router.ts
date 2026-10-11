@@ -38,7 +38,10 @@ export class Router {
     }
   }
 
-  private match(method: string, path: string): { route: string; request: (body: unknown) => Request } | undefined {
+  private match(
+    method: string,
+    path: string,
+  ): { route: string; request: (body: unknown) => Request } | undefined {
     const parts = path.split('/').filter(Boolean);
     for (const route of Object.keys(this.handlers)) {
       const [routeMethod, routePath] = route.split(' ');

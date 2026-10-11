@@ -1,30 +1,35 @@
 // The detail panel (spec §3.2, §3.6): everything about the selection, one click from the code.
 import {
   type Bullet,
+  blocksUnder,
+  cardBullets,
+  childrenOfKind,
   type DeckIndex,
   type DeckNode,
   type Id,
   type Link,
-  type TestRun,
-  blocksUnder,
-  cardBullets,
-  childrenOfKind,
   operationsOf,
   pathTo,
+  type TestRun,
   testStats,
 } from '@decker/deck-model';
 import { ArrowDownLeft, ArrowUpRight, Pin, Plus, Trash2, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { removeSelected } from '../lib/keys';
 import { GLYPH, Mark, StateBadge, TestsChip, testsLabel } from '../map/BlockNode';
-import { linkOf, linkState } from '../map/LinkEdge';
 import { camera } from '../map/camera';
+import { linkOf, linkState } from '../map/LinkEdge';
 import { testGroups } from '../model/measure';
-import { type Peek, currentRun, useDeck, visualState } from '../state/store';
+import { currentRun, type Peek, useDeck, visualState } from '../state/store';
 import { CodePeek, DiffView } from './CodePeek';
 import { ReviewPanel } from './ReviewPanel';
 
-const ORIGIN: Record<string, string> = { doc: 'doc comment', name: 'from its name', summarized: 'AI summary', authored: 'authored' };
+const ORIGIN: Record<string, string> = {
+  doc: 'doc comment',
+  name: 'from its name',
+  summarized: 'AI summary',
+  authored: 'authored',
+};
 const originLabel = (b: Bullet) => (b.origin === 'declared' ? ORIGIN[b.basis ?? 'doc']! : ORIGIN[b.origin]!);
 const GAP_REASON: Record<string, string> = {
   'dynamic-call': 'a call whose target is computed at run time',
@@ -52,7 +57,6 @@ function BulletLine({ bullet, ownerId, canEdit = true }: { bullet: Bullet; owner
           <input
             className="dd-input"
             defaultValue={bullet.text}
-            // biome-ignore lint/a11y/noAutofocus: opened by clicking the bullet
             autoFocus
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -67,7 +71,11 @@ function BulletLine({ bullet, ownerId, canEdit = true }: { bullet: Bullet; owner
           />
         ) : (
           <span
-            style={{ cursor: canEdit ? 'text' : undefined, textDecoration: state === 'removed' ? 'line-through' : undefined, color: state === 'changed' || state === 'requested' ? 'var(--requested)' : undefined }}
+            style={{
+              cursor: canEdit ? 'text' : undefined,
+              textDecoration: state === 'removed' ? 'line-through' : undefined,
+              color: state === 'changed' || state === 'requested' ? 'var(--requested)' : undefined,
+            }}
             onClick={() => canEdit && setEditing(true)}
             title={canEdit ? 'Click to change this behavior' : undefined}
           >
@@ -80,7 +88,14 @@ function BulletLine({ bullet, ownerId, canEdit = true }: { bullet: Bullet; owner
             type="button"
             className="dd-row-sub dd-link-btn"
             style={{ color: 'var(--faint)' }}
-            onClick={() => st().openPeek({ path: bullet.derivedFrom!.path, startLine: bullet.derivedFrom!.startLine, endLine: bullet.derivedFrom!.endLine, title: bullet.text })}
+            onClick={() =>
+              st().openPeek({
+                path: bullet.derivedFrom!.path,
+                startLine: bullet.derivedFrom!.startLine,
+                endLine: bullet.derivedFrom!.endLine,
+                title: bullet.text,
+              })
+            }
           >
             {bullet.derivedFrom.path.split('/').at(-1)}:{bullet.derivedFrom.startLine}
           </button>
@@ -89,20 +104,41 @@ function BulletLine({ bullet, ownerId, canEdit = true }: { bullet: Bullet; owner
       <span className="dd-row-actions">
         {bullet.origin === 'summarized' ? (
           <>
-            <button type="button" className="dd-mini" title="Keep this as an authored bullet" onClick={() => st().pinBullet(ownerId, bullet)}>
+            <button
+              type="button"
+              className="dd-mini"
+              title="Keep this as an authored bullet"
+              onClick={() => st().pinBullet(ownerId, bullet)}
+            >
               <Pin size={11} />
             </button>
-            <button type="button" className="dd-mini" title="Dismiss this summary" onClick={() => st().dismissBullet(bullet.id)}>
+            <button
+              type="button"
+              className="dd-mini"
+              title="Dismiss this summary"
+              onClick={() => st().dismissBullet(bullet.id)}
+            >
               <X size={11} />
             </button>
           </>
         ) : (
-          <button type="button" className="dd-mini" title="Request removing this behavior" onClick={() => st().requestRemove(bullet.id, 'bullet', `“${bullet.text}”`, ownerId)}>
+          <button
+            type="button"
+            className="dd-mini"
+            title="Request removing this behavior"
+            onClick={() => st().requestRemove(bullet.id, 'bullet', `“${bullet.text}”`, ownerId)}
+          >
             <Trash2 size={11} />
           </button>
         )}
       </span>
-      {state ? <StateBadge state={state === 'changed' ? 'requested' : state} /> : <span className="dd-origin" data-o={bullet.origin}>{originLabel(bullet)}</span>}
+      {state ? (
+        <StateBadge state={state === 'changed' ? 'requested' : state} />
+      ) : (
+        <span className="dd-origin" data-o={bullet.origin}>
+          {originLabel(bullet)}
+        </span>
+      )}
     </div>
   );
 }
@@ -121,7 +157,6 @@ function AddBullet({ targetId }: { targetId: Id }) {
       className="dd-input"
       style={{ marginTop: 4 }}
       placeholder="Describe a behavior, verb first, then press Enter"
-      // biome-ignore lint/a11y/noAutofocus: opened by the button above
       autoFocus
       data-testid="add-bullet-input"
       onKeyDown={(e) => {
@@ -152,7 +187,11 @@ function LinkRow({ link, dir, index }: { link: Link; dir: 'in' | 'out'; index: D
       onMouseEnter={() => useDeck.getState().hover(link.id)}
       onMouseLeave={() => useDeck.getState().hover(null)}
     >
-      {dir === 'in' ? <ArrowDownLeft size={13} color="var(--faint)" style={{ marginTop: 2 }} /> : <ArrowUpRight size={13} color="var(--faint)" style={{ marginTop: 2 }} />}
+      {dir === 'in' ? (
+        <ArrowDownLeft size={13} color="var(--faint)" style={{ marginTop: 2 }} />
+      ) : (
+        <ArrowUpRight size={13} color="var(--faint)" style={{ marginTop: 2 }} />
+      )}
       <span className="dd-row-main">
         {other.name}
         <span className="dd-row-sub">
@@ -202,10 +241,19 @@ function Overview({ block, index, run }: { block: DeckNode; index: DeckIndex; ru
         const peek = peekOf(op);
         return (
           <div key={op.id}>
-            <button type="button" className={`dd-row${focus ? ' is-focus' : ''}`} data-testid="panel-op" onClick={() => st().select(block.id, { op: focus ? null : op.id, keepTab: true })}>
+            <button
+              type="button"
+              className={`dd-row${focus ? ' is-focus' : ''}`}
+              data-testid="panel-op"
+              onClick={() => st().select(block.id, { op: focus ? null : op.id, keepTab: true })}
+            >
               <span className="dd-row-main mono" style={{ fontSize: 11.5, overflowWrap: 'anywhere' }}>
                 {op.signature ?? op.name}
-                {op.tags?.length ? <span className="dd-row-sub" style={{ fontFamily: 'var(--font-sans)' }}>{op.tags.join(' · ')}</span> : null}
+                {op.tags?.length ? (
+                  <span className="dd-row-sub" style={{ fontFamily: 'var(--font-sans)' }}>
+                    {op.tags.join(' · ')}
+                  </span>
+                ) : null}
               </span>
               <TestsChip stats={testStats(index.testsOf.get(op.id) ?? [], run)} />
             </button>
@@ -236,7 +284,13 @@ function Overview({ block, index, run }: { block: DeckNode; index: DeckIndex; ru
       {data.map((d) => {
         const peek = peekOf(d);
         return (
-          <button type="button" className="dd-row mono" key={d.id} style={{ fontSize: 11.5 }} onClick={() => peek && st().openPeek(peek)}>
+          <button
+            type="button"
+            className="dd-row mono"
+            key={d.id}
+            style={{ fontSize: 11.5 }}
+            onClick={() => peek && st().openPeek(peek)}
+          >
             {d.signature ?? d.name}
           </button>
         );
@@ -244,7 +298,10 @@ function Overview({ block, index, run }: { block: DeckNode; index: DeckIndex; ru
 
       {ins.length + outs.length + types.length + externals.length ? (
         <div className="dd-h">
-          Arrows <small>{ins.length} in · {outs.length} out</small>
+          Arrows{' '}
+          <small>
+            {ins.length} in · {outs.length} out
+          </small>
         </div>
       ) : null}
       {ins.map((l) => (
@@ -256,10 +313,17 @@ function Overview({ block, index, run }: { block: DeckNode; index: DeckIndex; ru
       {types.map((l) => {
         const other = index.byId.get(l.from === block.id ? l.to : l.from);
         return other ? (
-          <button type="button" className="dd-row" key={l.id} onClick={() => st().select(other.id, { fly: true })}>
+          <button
+            type="button"
+            className="dd-row"
+            key={l.id}
+            onClick={() => st().select(other.id, { fly: true })}
+          >
             <span className="dd-row-main" style={{ color: 'var(--muted)' }}>
               {other.name}
-              <span className="dd-row-sub">{l.from === block.id ? 'uses its types' : 'uses types from here'}</span>
+              <span className="dd-row-sub">
+                {l.from === block.id ? 'uses its types' : 'uses types from here'}
+              </span>
             </span>
           </button>
         ) : null;
@@ -268,7 +332,9 @@ function Overview({ block, index, run }: { block: DeckNode; index: DeckIndex; ru
         <div className="dd-row" style={{ color: 'var(--muted)' }}>
           <span className="dd-row-main">
             <span className="dd-row-sub">External</span>
-            <span className="mono" style={{ fontSize: 11.5 }}>{externals.map((e) => e.name).join(', ')}</span>
+            <span className="mono" style={{ fontSize: 11.5 }}>
+              {externals.map((e) => e.name).join(', ')}
+            </span>
           </span>
         </div>
       ) : null}
@@ -276,15 +342,29 @@ function Overview({ block, index, run }: { block: DeckNode; index: DeckIndex; ru
       <div className="dd-h">State and evidence</div>
       <dl className="dd-kv">
         <dt>On the map</dt>
-        <dd>{state ? <StateBadge state={state === 'renamed' || state === 'changed' ? 'requested' : state} /> : baseline ? 'Changed since the accepted baseline' : 'Accepted baseline'}</dd>
+        <dd>
+          {state ? (
+            <StateBadge state={state === 'renamed' || state === 'changed' ? 'requested' : state} />
+          ) : baseline ? (
+            'Changed since the accepted baseline'
+          ) : (
+            'Accepted baseline'
+          )}
+        </dd>
         <dt>Extraction</dt>
         <dd>
-          {block.coverage === 'full' ? 'Fully followed' : block.coverage === 'partial' ? `Partly followed: ${gaps.length} gap${gaps.length === 1 ? '' : 's'}` : `Opaque: ${gaps.length} gap${gaps.length === 1 ? '' : 's'}`}
+          {block.coverage === 'full'
+            ? 'Fully followed'
+            : block.coverage === 'partial'
+              ? `Partly followed: ${gaps.length} gap${gaps.length === 1 ? '' : 's'}`
+              : `Opaque: ${gaps.length} gap${gaps.length === 1 ? '' : 's'}`}
         </dd>
         <dt>Tests</dt>
         <dd>{testsLabel(stats)}</dd>
         <dt>Commit</dt>
-        <dd className="mono" style={{ fontSize: 11.5 }}>{commit.slice(0, 10)}</dd>
+        <dd className="mono" style={{ fontSize: 11.5 }}>
+          {commit.slice(0, 10)}
+        </dd>
       </dl>
       {gaps.map((g, i) => (
         <button
@@ -292,12 +372,23 @@ function Overview({ block, index, run }: { block: DeckNode; index: DeckIndex; ru
           className="dd-row"
           key={i}
           data-testid="panel-gap"
-          onClick={() => st().openPeek({ path: g.source.path, startLine: g.source.startLine, endLine: g.source.endLine, title: 'Not followed' })}
+          onClick={() =>
+            st().openPeek({
+              path: g.source.path,
+              startLine: g.source.startLine,
+              endLine: g.source.endLine,
+              title: 'Not followed',
+            })
+          }
         >
-          <span className="dd-opaque" style={{ fontSize: 11 }}>?</span>
+          <span className="dd-opaque" style={{ fontSize: 11 }}>
+            ?
+          </span>
           <span className="dd-row-main">
             Could not follow {GAP_REASON[g.reason]}
-            <span className="dd-row-sub mono">{g.source.path.split('/').at(-1)}:{g.source.startLine}</span>
+            <span className="dd-row-sub mono">
+              {g.source.path.split('/').at(-1)}:{g.source.startLine}
+            </span>
           </span>
         </button>
       ))}
@@ -310,11 +401,15 @@ function TestsTab({ block, index, run }: { block: DeckNode; index: DeckIndex; ru
   if (groups.length === 0) return <div className="dd-empty">No test calls this block directly.</div>;
   return (
     <>
-      <p className="dd-note">A test hangs off an operation when it calls that operation directly. This is not coverage.</p>
+      <p className="dd-note">
+        A test hangs off an operation when it calls that operation directly. This is not coverage.
+      </p>
       {groups.map((g) => (
         <div key={g.id}>
           <div className="dd-h" style={{ textTransform: 'none', letterSpacing: 0 }}>
-            <span className="mono" style={{ color: 'var(--text)', fontSize: 12 }}>{g.label}</span>
+            <span className="mono" style={{ color: 'var(--text)', fontSize: 12 }}>
+              {g.label}
+            </span>
             <span style={{ marginLeft: 'auto' }}>
               <TestsChip stats={testStats(g.tests, run)} />
             </span>
@@ -328,14 +423,31 @@ function TestsTab({ block, index, run }: { block: DeckNode; index: DeckIndex; ru
                 className="dd-row"
                 key={t.id}
                 data-testid="panel-test"
-                onClick={() => useDeck.getState().openPeek({ path: t.source.path, startLine: t.source.startLine, endLine: t.source.endLine, title: t.name })}
+                onClick={() =>
+                  useDeck.getState().openPeek({
+                    path: t.source.path,
+                    startLine: t.source.startLine,
+                    endLine: t.source.endLine,
+                    title: t.name,
+                  })
+                }
               >
-                <span className="dd-glyph" data-s={status} title={status === 'none' ? 'not run at this commit' : status}>
+                <span
+                  className="dd-glyph"
+                  data-s={status}
+                  title={status === 'none' ? 'not run at this commit' : status}
+                >
                   {GLYPH[status]}
                 </span>
                 <span className="dd-row-main">
                   {t.name}
-                  {via && via !== 'calls' ? <span className="dd-row-sub">{via === 'imports' ? 'imports the block; no direct call found' : 'beside the block by naming convention'}</span> : null}
+                  {via && via !== 'calls' ? (
+                    <span className="dd-row-sub">
+                      {via === 'imports'
+                        ? 'imports the block; no direct call found'
+                        : 'beside the block by naming convention'}
+                    </span>
+                  ) : null}
                 </span>
               </button>
             );
@@ -352,7 +464,9 @@ function BlockPanel({ block, index }: { block: DeckNode; index: DeckIndex }) {
   const focusOpId = useDeck((s) => s.focusOpId);
   const review = useDeck((s) => s.review);
   const run = useDeck(currentRun);
-  const renamedFrom = useDeck((s) => (s.marks.get(block.id)?.state === 'renamed' ? s.marks.get(block.id)?.before : undefined));
+  const renamedFrom = useDeck((s) =>
+    s.marks.get(block.id)?.state === 'renamed' ? s.marks.get(block.id)?.before : undefined,
+  );
   const state = useDeck((s) => visualState(s, block.id));
   const path = pathTo(index, block.id);
   const tests = index.testsOf.get(block.id) ?? [];
@@ -373,22 +487,46 @@ function BlockPanel({ block, index }: { block: DeckNode; index: DeckIndex }) {
               .join(' ▸ ')}
           </span>
           <span className="dd-spacer" />
-          <button type="button" className="dd-icon-btn" style={{ width: 22, height: 22 }} aria-label="Request removal" title="Request removing this block  (Delete)" onClick={removeSelected}>
+          <button
+            type="button"
+            className="dd-icon-btn"
+            style={{ width: 22, height: 22 }}
+            aria-label="Request removal"
+            title="Request removing this block  (Delete)"
+            onClick={removeSelected}
+          >
             <Trash2 size={13} />
           </button>
-          <button type="button" className="dd-icon-btn" style={{ width: 22, height: 22 }} aria-label="Close panel" onClick={() => st().select(null)} data-testid="panel-close">
+          <button
+            type="button"
+            className="dd-icon-btn"
+            style={{ width: 22, height: 22 }}
+            aria-label="Close panel"
+            onClick={() => st().select(null)}
+            data-testid="panel-close"
+          >
             <X size={14} />
           </button>
         </div>
         <h2 className="dd-panel-name" data-testid="panel-name">
-          {renamedFrom ? <s style={{ color: 'var(--faint)', fontWeight: 450, marginRight: 8 }}>{renamedFrom}</s> : null}
+          {renamedFrom ? (
+            <s style={{ color: 'var(--faint)', fontWeight: 450, marginRight: 8 }}>{renamedFrom}</s>
+          ) : null}
           {block.name} {state === 'requested' ? <StateBadge state="requested" /> : null}
         </h2>
         {block.summary ? <div className="dd-panel-sub">{block.summary.text}</div> : null}
       </div>
       <div className="dd-tabs" role="tablist">
         {(['overview', 'tests', 'source', ...(review ? (['diff'] as const) : [])] as const).map((t) => (
-          <button type="button" role="tab" key={t} className="dd-tab" aria-selected={tab === t} data-testid={`tab-${t}`} onClick={() => st().set({ panelTab: t })}>
+          <button
+            type="button"
+            role="tab"
+            key={t}
+            className="dd-tab"
+            aria-selected={tab === t}
+            data-testid={`tab-${t}`}
+            onClick={() => st().set({ panelTab: t })}
+          >
             {t[0]!.toUpperCase() + t.slice(1)}
             {t === 'tests' ? <small>{tests.length}</small> : null}
           </button>
@@ -397,7 +535,13 @@ function BlockPanel({ block, index }: { block: DeckNode; index: DeckIndex }) {
       <div className="dd-panel-body">
         {tab === 'overview' ? <Overview block={block} index={index} run={run} /> : null}
         {tab === 'tests' ? <TestsTab block={block} index={index} run={run} /> : null}
-        {tab === 'source' ? shown ? <CodePeek peek={shown} /> : <div className="dd-empty">This block has no source yet. It is a request.</div> : null}
+        {tab === 'source' ? (
+          shown ? (
+            <CodePeek peek={shown} />
+          ) : (
+            <div className="dd-empty">This block has no source yet. It is a request.</div>
+          )
+        ) : null}
         {tab === 'diff' && review ? <DiffView files={review.diff.filter((f) => paths.has(f.path))} /> : null}
       </div>
     </>
@@ -416,11 +560,19 @@ function AreaPanel({ area, index }: { area: DeckNode; index: DeckIndex }) {
         <div className="dd-panel-kind">
           <span>Area</span>
           <span className="dd-spacer" />
-          <button type="button" className="dd-icon-btn" style={{ width: 22, height: 22 }} aria-label="Close panel" onClick={() => st().select(null)}>
+          <button
+            type="button"
+            className="dd-icon-btn"
+            style={{ width: 22, height: 22 }}
+            aria-label="Close panel"
+            onClick={() => st().select(null)}
+          >
             <X size={14} />
           </button>
         </div>
-        <h2 className="dd-panel-name" data-testid="panel-name">{area.name}</h2>
+        <h2 className="dd-panel-name" data-testid="panel-name">
+          {area.name}
+        </h2>
         <div className="dd-panel-sub">
           {blocks.length} block{blocks.length === 1 ? '' : 's'} · {testsLabel(stats)}
         </div>
@@ -428,7 +580,12 @@ function AreaPanel({ area, index }: { area: DeckNode; index: DeckIndex }) {
       <div className="dd-panel-body">
         <div className="dd-h">Blocks</div>
         {blocks.map((b) => (
-          <button type="button" className="dd-row" key={b.id} onClick={() => st().select(b.id, { fly: true })}>
+          <button
+            type="button"
+            className="dd-row"
+            key={b.id}
+            onClick={() => st().select(b.id, { fly: true })}
+          >
             <span className="dd-row-main">
               {b.name}
               {b.summary ? <span className="dd-row-sub">{b.summary.text}</span> : null}
@@ -457,11 +614,24 @@ function LinkPanel({ link, index }: { link: Link; index: DeckIndex }) {
           <span>Arrow</span>
           <span className="dd-spacer" />
           {!isArea ? (
-            <button type="button" className="dd-icon-btn" style={{ width: 22, height: 22 }} aria-label="Request removal" title="Request removing this arrow  (Delete)" onClick={removeSelected}>
+            <button
+              type="button"
+              className="dd-icon-btn"
+              style={{ width: 22, height: 22 }}
+              aria-label="Request removal"
+              title="Request removing this arrow  (Delete)"
+              onClick={removeSelected}
+            >
               <Trash2 size={13} />
             </button>
           ) : null}
-          <button type="button" className="dd-icon-btn" style={{ width: 22, height: 22 }} aria-label="Close panel" onClick={() => st().select(null)}>
+          <button
+            type="button"
+            className="dd-icon-btn"
+            style={{ width: 22, height: 22 }}
+            aria-label="Close panel"
+            onClick={() => st().select(null)}
+          >
             <X size={14} />
           </button>
         </div>
@@ -469,7 +639,8 @@ function LinkPanel({ link, index }: { link: Link; index: DeckIndex }) {
           {from?.name} → {to?.name}
         </h2>
         <div className="dd-panel-sub">
-          {link.label ?? link.kinds.join(', ')} · {link.count} {link.count === 1 ? 'interaction' : 'interactions'} <StateBadge state={state} />
+          {link.label ?? link.kinds.join(', ')} · {link.count}{' '}
+          {link.count === 1 ? 'interaction' : 'interactions'} <StateBadge state={state} />
         </div>
       </div>
       <div className="dd-panel-body">
@@ -494,18 +665,28 @@ function LinkPanel({ link, index }: { link: Link; index: DeckIndex }) {
               onClick={() => {
                 if (!ref) return;
                 st().select(index.blockOf.get(e.from) ?? e.from, { keepTab: true });
-                st().openPeek({ path: ref.path, startLine: ref.startLine, endLine: ref.endLine, title: `${a?.name} → ${b?.name}` });
+                st().openPeek({
+                  path: ref.path,
+                  startLine: ref.startLine,
+                  endLine: ref.endLine,
+                  title: `${a?.name} → ${b?.name}`,
+                });
               }}
             >
               <span className="dd-row-main mono" style={{ fontSize: 11.5 }}>
                 {isArea ? `${index.byId.get(index.blockOf.get(e.from) ?? '')?.name ?? ''}.` : ''}
-                {a?.kind === 'operation' ? a.name : (a?.name ?? '?')} → {isArea ? `${index.byId.get(index.blockOf.get(e.to) ?? '')?.name ?? ''}.` : ''}
+                {a?.kind === 'operation' ? a.name : (a?.name ?? '?')} →{' '}
+                {isArea ? `${index.byId.get(index.blockOf.get(e.to) ?? '')?.name ?? ''}.` : ''}
                 {b?.kind === 'operation' ? b.name : (b?.name ?? '?')}
                 <span className="dd-row-sub" style={{ fontFamily: 'var(--font-sans)' }}>
                   {e.kind}
                   {e.label ? ` · ${e.label}` : ''}
                   {e.indirect ? ` · ${e.indirect}` : ''}
-                  {ref ? ` · ${ref.path.split('/').at(-1)}:${ref.startLine}` : edgeState === 'requested' ? ' · requested, not in the code yet' : ''}
+                  {ref
+                    ? ` · ${ref.path.split('/').at(-1)}:${ref.startLine}`
+                    : edgeState === 'requested'
+                      ? ' · requested, not in the code yet'
+                      : ''}
                 </span>
               </span>
             </button>
@@ -514,7 +695,12 @@ function LinkPanel({ link, index }: { link: Link; index: DeckIndex }) {
         <div className="dd-h">Ends</div>
         {[from, to].map((n) =>
           n ? (
-            <button type="button" className="dd-row" key={n.id} onClick={() => st().select(n.id, { fly: true })}>
+            <button
+              type="button"
+              className="dd-row"
+              key={n.id}
+              onClick={() => st().select(n.id, { fly: true })}
+            >
               <span className="dd-row-main">{n.name}</span>
             </button>
           ) : null,
@@ -548,7 +734,9 @@ export function DetailPanel() {
         }}
         onPointerMove={(e) => {
           if (!resizing) return;
-          useDeck.getState().set({ panelWidth: Math.min(720, Math.max(300, start.current.w + start.current.x - e.clientX)) });
+          useDeck
+            .getState()
+            .set({ panelWidth: Math.min(720, Math.max(300, start.current.w + start.current.x - e.clientX)) });
         }}
         onPointerUp={() => setResizing(false)}
         onDoubleClick={() => useDeck.getState().set({ panelWidth: 380 })}

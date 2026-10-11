@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { type Shop, createShop } from '../http/app';
+import { createShop, type Shop } from '../http/app';
 import { resetIds } from '../shared/ids';
 import { addItem, emptyCart } from './cart';
 

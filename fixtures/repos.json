@@ -1,0 +1,47 @@
+{
+  "note": "Public repositories used to prove the map on code nobody wrote for this project (spec §9.2). Each is pinned to the commit that was measured. Clone at that commit and run `decker <path>` to repeat it. Nothing was installed and no repository code was executed.",
+  "measured": "2026-10-11",
+  "machine": "Intel Core i7-13700K, 16 cores / 24 threads, 32 GB RAM, Windows 11, Node 24.18",
+  "repos": [
+    {
+      "name": "hono",
+      "url": "https://github.com/honojs/hono",
+      "license": "MIT",
+      "commit": "552ea024250093a48071b3ded9710de4c6e05f14",
+      "dependenciesInstalled": false,
+      "result": {
+        "firstMapMs": 3331,
+        "extractionMs": 2004,
+        "files": 323,
+        "lines": 82845,
+        "areas": 25,
+        "blocks": 141,
+        "operations": 580,
+        "tests": 2933,
+        "testsAttributedByDirectCall": 2382,
+        "gaps": 55,
+        "resolvedPercent": 98.42
+      }
+    },
+    {
+      "name": "storage",
+      "url": "https://github.com/supabase/storage",
+      "license": "Apache-2.0",
+      "commit": "f31599e188d7c9c854b1daa76a11b41c6d179462",
+      "dependenciesInstalled": false,
+      "result": {
+        "firstMapMs": 4203,
+        "extractionMs": 2477,
+        "files": 604,
+        "lines": 156355,
+        "areas": 44,
+        "blocks": 250,
+        "operations": 2040,
+        "tests": 3024,
+        "gaps": 1524,
+        "resolvedPercent": 83.38,
+        "comment": "Without its dependencies installed, types imported from packages are unknown, which accounts for almost every gap. The figure with dependencies installed has not been measured."
+      }
+    }
+  ]
+}

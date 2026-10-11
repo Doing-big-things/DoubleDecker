@@ -3,20 +3,31 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { type IdsFile, type RenameSuggestion, TypeScriptAdapter, confirmRename } from '@decker/adapter-typescript';
-import { type AgentWorker, ClaudeWorker, ScriptedWorker, summarizeBlock, summaryKey } from '@decker/agent-gateway';
+import {
+  confirmRename,
+  type IdsFile,
+  type RenameSuggestion,
+  TypeScriptAdapter,
+} from '@decker/adapter-typescript';
+import {
+  type AgentWorker,
+  ClaudeWorker,
+  ScriptedWorker,
+  summarizeBlock,
+  summaryKey,
+} from '@decker/agent-gateway';
 import {
   Coordinator,
+  changedPaths,
   DeckDir,
   type DeckHost,
   type DeckSettings,
-  type SandboxKind,
-  changedPaths,
   detectRuntime,
   headCommit,
   isDirty,
   renames,
   repoRoot,
+  type SandboxKind,
   showFile,
   workingTreeHash,
 } from '@decker/core';
@@ -26,12 +37,12 @@ import {
   type DeckLayout,
   type DeckNotes,
   type DeckSnapshot,
-  type Id,
-  type ServerEvent,
-  type TestRun,
   hashId,
+  type Id,
   layoutSchema,
   notesSchema,
+  type ServerEvent,
+  type TestRun,
 } from '@decker/deck-model';
 import { watch } from 'chokidar';
 
@@ -71,16 +82,23 @@ export class DeckService implements DeckHost {
 
   constructor(root: string, options: ServiceOptions = {}) {
     this.root = path.resolve(root);
-    if (!existsSync(this.root) || !statSync(this.root).isDirectory()) throw new Error(`${this.root} is not a directory.`);
+    if (!existsSync(this.root) || !statSync(this.root).isDirectory())
+      throw new Error(`${this.root} is not a directory.`);
     this.gitRoot = repoRoot(this.root);
     this.dir = new DeckDir(this.root);
     this.dir.ensure();
     const settings = this.settings();
-    this.adapter = new TypeScriptAdapter(this.root, { tsconfig: settings.tsconfig, testPatterns: settings.testPatterns, exclude: settings.exclude });
-    this.sandbox = !options.sandbox || options.sandbox === 'auto' ? (detectRuntime() ?? 'none') : options.sandbox;
+    this.adapter = new TypeScriptAdapter(this.root, {
+      tsconfig: settings.tsconfig,
+      testPatterns: settings.testPatterns,
+      exclude: settings.exclude,
+    });
+    this.sandbox =
+      !options.sandbox || options.sandbox === 'auto' ? (detectRuntime() ?? 'none') : options.sandbox;
 
     let worker: AgentWorker | null = null;
-    const wanted = options.worker && options.worker !== 'auto' ? options.worker : (settings.worker?.type ?? 'claude');
+    const wanted =
+      options.worker && options.worker !== 'auto' ? options.worker : (settings.worker?.type ?? 'claude');
     if (wanted === 'scripted') {
       const scripted = new ScriptedWorker(path.resolve(this.root, settings.worker?.dir ?? 'demo'));
       worker = scripted.available ? scripted : null;
@@ -144,7 +162,9 @@ export class DeckService implements DeckHost {
     this.lastExtractMs = result.ms;
     this.dir.writeIds(result.ids);
     this.dir.writeCache('snapshot.json', result.snapshot);
-    this.treeHash = this.gitRoot ? workingTreeHash(this.root) : result.snapshot.nodes.map((n) => n.source[0]?.hash ?? '').join('');
+    this.treeHash = this.gitRoot
+      ? workingTreeHash(this.root)
+      : result.snapshot.nodes.map((n) => n.source[0]?.hash ?? '').join('');
     this.gitState = this.readGitState();
   }
 
@@ -161,8 +181,16 @@ export class DeckService implements DeckHost {
       notes: this.dir.notes(),
       testRun: this.dir.readCache<TestRun>('testrun.json'),
       changes: this.coordinator.list(),
-      capabilities: { server: true, editor: true, sandbox: this.sandbox, worker: this.workerName, summarizer: Boolean(this.settings().summarizer) },
-      changedSinceBaseline: this.current.nodes.filter((n) => n.kind === 'block' && n.source.some((s) => changed.has(s.path))).map((n) => n.id),
+      capabilities: {
+        server: true,
+        editor: true,
+        sandbox: this.sandbox,
+        worker: this.workerName,
+        summarizer: Boolean(this.settings().summarizer),
+      },
+      changedSinceBaseline: this.current.nodes
+        .filter((n) => n.kind === 'block' && n.source.some((s) => changed.has(s.path)))
+        .map((n) => n.id),
       treeHash: this.treeHash,
       renames: this.suggestions.map((s) => ({ id: s.id, from: s.from, to: s.to })),
     };
@@ -182,8 +210,15 @@ export class DeckService implements DeckHost {
   }
 
   private startWatching(): void {
-    const ignored = (file: string) => /(^|[\\/])(node_modules|\.git|\.deck|dist|build|coverage)([\\/]|$)/.test(path.relative(this.root, file));
-    this.watcher = watch(this.root, { ignored, ignoreInitial: true, awaitWriteFinish: { stabilityThreshold: 60, pollInterval: 20 } });
+    const ignored = (file: string) =>
+      /(^|[\\/])(node_modules|\.git|\.deck|dist|build|coverage)([\\/]|$)/.test(
+        path.relative(this.root, file),
+      );
+    this.watcher = watch(this.root, {
+      ignored,
+      ignoreInitial: true,
+      awaitWriteFinish: { stabilityThreshold: 60, pollInterval: 20 },
+    });
     const onFile = (file: string) => {
       if (!/\.[cm]?[jt]sx?$|tsconfig.*\.json$|package\.json$/.test(file)) return;
       this.pending.add(file);
@@ -242,7 +277,10 @@ export class DeckService implements DeckHost {
 
   source(file: string, ref?: string): string | null {
     const abs = this.resolve(file);
-    if (ref) return /^[0-9a-f]{7,40}$/.test(ref) && this.gitRoot ? showFile(this.root, ref, file.replace(/\\/g, '/')) : null;
+    if (ref)
+      return /^[0-9a-f]{7,40}$/.test(ref) && this.gitRoot
+        ? showFile(this.root, ref, file.replace(/\\/g, '/'))
+        : null;
     return existsSync(abs) && statSync(abs).isFile() ? readFileSync(abs, 'utf8') : null;
   }
 
@@ -252,9 +290,17 @@ export class DeckService implements DeckHost {
     if (/["&|<>^%\n\r]/.test(abs)) throw new Error('That path cannot be passed to an editor safely.');
     const safeLine = Number.isInteger(line) && line > 0 ? line : 1;
     const parts = this.settings().editor.split(/\s+/).filter(Boolean);
-    const args = parts.slice(1).map((part) => part.replaceAll('{path}', abs).replaceAll('{line}', String(safeLine)));
+    const args = parts
+      .slice(1)
+      .map((part) => part.replaceAll('{path}', abs).replaceAll('{line}', String(safeLine)));
     const windows = process.platform === 'win32';
-    const child = spawn(parts[0]!, windows ? args.map((a) => (a.includes(' ') ? `"${a}"` : a)) : args, { cwd: this.root, shell: windows, detached: !windows, stdio: 'ignore', windowsHide: true });
+    const child = spawn(parts[0]!, windows ? args.map((a) => (a.includes(' ') ? `"${a}"` : a)) : args, {
+      cwd: this.root,
+      shell: windows,
+      detached: !windows,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
     child.on('error', () => {});
     child.unref();
   }
@@ -293,9 +339,18 @@ export class DeckService implements DeckHost {
     };
   }
 
-  private summaryPatch(id: Id, file: string, existing: Bullet | undefined, s: CachedSummary): { summary?: Bullet; bullets: Bullet[] } {
+  private summaryPatch(
+    id: Id,
+    file: string,
+    existing: Bullet | undefined,
+    s: CachedSummary,
+  ): { summary?: Bullet; bullets: Bullet[] } {
     return {
-      summary: existing ?? (s.summary ? { id: hashId('bullet', `${id}:ai-summary`), text: s.summary, origin: 'summarized' } : undefined),
+      summary:
+        existing ??
+        (s.summary
+          ? { id: hashId('bullet', `${id}:ai-summary`), text: s.summary, origin: 'summarized' }
+          : undefined),
       bullets: s.bullets.map((b, i) => ({
         id: hashId('bullet', `${id}:ai:${i}:${b.text}`),
         text: b.text,
@@ -310,7 +365,9 @@ export class DeckService implements DeckHost {
     if (!config || this.summarizing) return;
     this.summarizing = true;
     try {
-      const todo = this.current.nodes.filter((n) => n.kind === 'block' && n.source[0] && !this.summaries[summaryKey(n.source[0].hash, config)]);
+      const todo = this.current.nodes.filter(
+        (n) => n.kind === 'block' && n.source[0] && !this.summaries[summaryKey(n.source[0].hash, config)],
+      );
       let next = 0;
       const worker = async () => {
         while (next < todo.length) {
@@ -319,10 +376,24 @@ export class DeckService implements DeckHost {
           const text = this.source(ref.path);
           if (text === null) continue;
           try {
-            const result = await summarizeBlock(config, block.name, ref.path, text, AbortSignal.timeout(60_000));
+            const result = await summarizeBlock(
+              config,
+              block.name,
+              ref.path,
+              text,
+              AbortSignal.timeout(60_000),
+            );
             this.summaries[summaryKey(ref.hash, config)] = result;
-            const patch = this.summaryPatch(block.id, ref.path, block.summary?.origin === 'summarized' ? undefined : block.summary, result);
-            this.current = { ...this.current, nodes: this.current.nodes.map((n) => (n.id === block.id ? { ...n, ...patch } : n)) };
+            const patch = this.summaryPatch(
+              block.id,
+              ref.path,
+              block.summary?.origin === 'summarized' ? undefined : block.summary,
+              result,
+            );
+            this.current = {
+              ...this.current,
+              nodes: this.current.nodes.map((n) => (n.id === block.id ? { ...n, ...patch } : n)),
+            };
             this.emit({ type: 'summary', nodeId: block.id, summary: patch.summary, bullets: patch.bullets });
           } catch {
             // No summary for this block. The map works without it.

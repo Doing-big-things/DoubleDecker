@@ -10,7 +10,9 @@ type Dir = 'left' | 'right' | 'up' | 'down';
 function typing(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
-  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
+  return (
+    el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable
+  );
 }
 
 /** Move the selection to the nearest neighbor in a direction. */
@@ -19,7 +21,9 @@ function navigate(dir: Dir): void {
   const index = st.index;
   if (!index) return;
   const kind = levelOf(st.band) === 'system' ? 'area' : 'block';
-  const candidates = (kind === 'area' ? index.areas : index.blocks).map((n) => camera.box(n.id)).filter((b) => b !== undefined);
+  const candidates = (kind === 'area' ? index.areas : index.blocks)
+    .map((n) => camera.box(n.id))
+    .filter((b) => b !== undefined);
   if (candidates.length === 0) return;
   const cur = st.selectedId ? camera.box(st.selectedId) : undefined;
   const origin = cur ? { x: cur.ax + cur.w / 2, y: cur.ay + cur.h / 2 } : camera.center();
@@ -54,10 +58,14 @@ export function openSelectedInEditor(): void {
   const index = st.index;
   if (!index || !st.selectedId) return;
   const node = index.byId.get(st.focusOpId ?? st.selectedId);
-  const ref = st.peek ?? (node?.source[0] ? { path: node.source[0].path, startLine: node.source[0].startLine } : null);
+  const ref =
+    st.peek ?? (node?.source[0] ? { path: node.source[0].path, startLine: node.source[0].startLine } : null);
   if (!ref) return;
   void st.source?.openInEditor(ref.path, ref.startLine).then((ok) => {
-    st.toast(ok ? `Opened ${ref.path}:${ref.startLine}` : 'Opening an editor needs a connected repository', !ok);
+    st.toast(
+      ok ? `Opened ${ref.path}:${ref.startLine}` : 'Opening an editor needs a connected repository',
+      !ok,
+    );
   });
 }
 
@@ -71,7 +79,12 @@ export function removeSelected(): void {
     if (link.id.startsWith('aln:')) return;
     const requested = link.edges.filter((e) => st.marks.get(e.id)?.state === 'requested');
     if (requested.length === link.edges.length) for (const e of requested) st.requestRemove(e.id, 'edge', '');
-    else st.requestRemove(id, 'edge', `the arrow ${index.byId.get(link.from)?.name} → ${index.byId.get(link.to)?.name}`);
+    else
+      st.requestRemove(
+        id,
+        'edge',
+        `the arrow ${index.byId.get(link.from)?.name} → ${index.byId.get(link.to)?.name}`,
+      );
     return;
   }
   const node = index.byId.get(st.focusOpId ?? id);
@@ -87,7 +100,10 @@ export function startRename(): void {
   const box = camera.box(st.selectedId!);
   const vp = camera.viewport();
   const stage = document.querySelector('.dd-stage')?.getBoundingClientRect();
-  if (node.kind === 'block' && levelOf(st.band) === 'blocks') return st.set({ editing: `name:${node.id}` });
+  if (node.kind === 'block' && levelOf(st.band) === 'blocks') {
+    st.set({ editing: `name:${node.id}` });
+    return;
+  }
   st.set({
     popover: {
       kind: 'rename',
@@ -103,14 +119,22 @@ export function newBlock(): void {
   const index = st.index;
   if (!index) return;
   const sel = st.selectedId ? index.byId.get(st.selectedId) : undefined;
-  let parentId: Id | undefined = sel?.kind === 'area' ? sel.id : sel?.kind === 'block' ? (sel.parentId ?? undefined) : undefined;
+  let parentId: Id | undefined =
+    sel?.kind === 'area' ? sel.id : sel?.kind === 'block' ? (sel.parentId ?? undefined) : undefined;
   if (!parentId) {
     // The innermost area under the middle of the screen.
     const c = camera.center();
     let depth = -1;
     for (const area of index.areas) {
       const box = camera.box(area.id);
-      if (box && c.x >= box.ax && c.x <= box.ax + box.w && c.y >= box.ay && c.y <= box.ay + box.h && box.depth > depth) {
+      if (
+        box &&
+        c.x >= box.ax &&
+        c.x <= box.ax + box.w &&
+        c.y >= box.ay &&
+        c.y <= box.ay + box.h &&
+        box.depth > depth
+      ) {
         depth = box.depth;
         parentId = area.id;
       }
@@ -118,7 +142,14 @@ export function newBlock(): void {
   }
   parentId ??= index.areas[0]?.id ?? index.system.id;
   const stage = document.querySelector('.dd-stage')?.getBoundingClientRect();
-  st.set({ popover: { kind: 'block', parentId, x: (stage?.left ?? 0) + (stage?.width ?? 800) / 2 - 160, y: (stage?.top ?? 0) + 120 } });
+  st.set({
+    popover: {
+      kind: 'block',
+      parentId,
+      x: (stage?.left ?? 0) + (stage?.width ?? 800) / 2 - 160,
+      y: (stage?.top ?? 0) + 120,
+    },
+  });
 }
 
 export function useKeys(): void {
@@ -165,12 +196,20 @@ export function useKeys(): void {
       }
       if (mod || e.altKey) return;
 
-      const arrows: Record<string, Dir> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
+      const arrows: Record<string, Dir> = {
+        ArrowLeft: 'left',
+        ArrowRight: 'right',
+        ArrowUp: 'up',
+        ArrowDown: 'down',
+      };
       if (arrows[key]) {
         e.preventDefault();
         if (e.shiftKey) {
           const step = 120;
-          return camera.panBy(key === 'ArrowLeft' ? step : key === 'ArrowRight' ? -step : 0, key === 'ArrowUp' ? step : key === 'ArrowDown' ? -step : 0);
+          return camera.panBy(
+            key === 'ArrowLeft' ? step : key === 'ArrowRight' ? -step : 0,
+            key === 'ArrowUp' ? step : key === 'ArrowDown' ? -step : 0,
+          );
         }
         return navigate(arrows[key]);
       }

@@ -13,11 +13,83 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-const DOMAINS = ['Billing', 'Accounts', 'Search', 'Messaging', 'Reports', 'Shipping', 'Identity', 'Media', 'Ledger', 'Pricing', 'Audit', 'Scheduling', 'Gateway', 'Storage', 'Insights', 'Support', 'Catalog', 'Checkout', 'Risk', 'Notifications', 'Workflow', 'Imports', 'Exports', 'Platform'];
+const DOMAINS = [
+  'Billing',
+  'Accounts',
+  'Search',
+  'Messaging',
+  'Reports',
+  'Shipping',
+  'Identity',
+  'Media',
+  'Ledger',
+  'Pricing',
+  'Audit',
+  'Scheduling',
+  'Gateway',
+  'Storage',
+  'Insights',
+  'Support',
+  'Catalog',
+  'Checkout',
+  'Risk',
+  'Notifications',
+  'Workflow',
+  'Imports',
+  'Exports',
+  'Platform',
+];
 const PARTS = ['Core', 'Rules', 'Store', 'Api', 'Jobs', 'Views'];
-const NOUNS = ['Invoice', 'Session', 'Token', 'Queue', 'Batch', 'Policy', 'Cache', 'Index', 'Draft', 'Quota', 'Rate', 'Plan', 'Route', 'Lease', 'Shard', 'Report', 'Digest', 'Cursor', 'Bucket', 'Ticket'];
-const ROLES = ['Service', 'Repository', 'Validator', 'Mapper', 'Scheduler', 'Client', 'Planner', 'Reader', 'Writer', 'Resolver', 'Monitor', 'Builder'];
-const VERBS = ['create', 'find', 'update', 'remove', 'list', 'validate', 'schedule', 'resolve', 'merge', 'publish', 'archive', 'rebuild'];
+const NOUNS = [
+  'Invoice',
+  'Session',
+  'Token',
+  'Queue',
+  'Batch',
+  'Policy',
+  'Cache',
+  'Index',
+  'Draft',
+  'Quota',
+  'Rate',
+  'Plan',
+  'Route',
+  'Lease',
+  'Shard',
+  'Report',
+  'Digest',
+  'Cursor',
+  'Bucket',
+  'Ticket',
+];
+const ROLES = [
+  'Service',
+  'Repository',
+  'Validator',
+  'Mapper',
+  'Scheduler',
+  'Client',
+  'Planner',
+  'Reader',
+  'Writer',
+  'Resolver',
+  'Monitor',
+  'Builder',
+];
+const VERBS = [
+  'create',
+  'find',
+  'update',
+  'remove',
+  'list',
+  'validate',
+  'schedule',
+  'resolve',
+  'merge',
+  'publish',
+  'archive',
+  'rebuild',
+];
 
 export function buildStress(blockTarget = 1500, edgeTarget = 4000): DeckBundle {
   const rand = mulberry32(20261011);
@@ -47,7 +119,12 @@ export function buildStress(blockTarget = 1500, edgeTarget = 4000): DeckBundle {
             summary: `Handles ${part.toLowerCase()} work for ${domain.toLowerCase()}`,
             path: `src/${domain.toLowerCase()}/${part.toLowerCase()}/${name}.ts`,
             ran: rand() > 0.3,
-            ops: [...verbs].map((v) => op(`${v}(input: Input): Output`, '~', { calls: [], tests: rand() > 0.5 ? [`${v}s the input`, `rejects a bad input`] : [] })),
+            ops: [...verbs].map((v) =>
+              op(`${v}(input: Input): Output`, '~', {
+                calls: [],
+                tests: rand() > 0.5 ? [`${v}s the input`, `rejects a bad input`] : [],
+              }),
+            ),
           },
         });
       }

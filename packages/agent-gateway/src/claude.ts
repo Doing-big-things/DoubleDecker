@@ -2,8 +2,8 @@
 // The conversation with the model runs in this process. File tools are confined to the
 // worktree, and there is no shell: the only way to execute anything is Sandbox.run.
 import path from 'node:path';
+import { createSdkMcpServer, type Options, query, tool } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentEvent, Plan } from '@decker/deck-model';
-import { type Options, createSdkMcpServer, query, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { AgentWorker, Sandbox, WorkPackage } from './types.ts';
 
@@ -12,7 +12,10 @@ const PLAN_SCHEMA = {
   required: ['interpretation', 'requirements', 'files', 'checks', 'questions'],
   additionalProperties: false,
   properties: {
-    interpretation: { type: 'string', description: 'What the change asks for, in plain English, in two or three sentences.' },
+    interpretation: {
+      type: 'string',
+      description: 'What the change asks for, in plain English, in two or three sentences.',
+    },
     requirements: {
       type: 'array',
       description: 'Each requirement is one testable statement.',
@@ -23,12 +26,19 @@ const PLAN_SCHEMA = {
         properties: {
           id: { type: 'string' },
           text: { type: 'string' },
-          opId: { type: 'string', description: 'The id of the operation this requirement comes from, if any.' },
+          opId: {
+            type: 'string',
+            description: 'The id of the operation this requirement comes from, if any.',
+          },
           test: { type: 'string', description: 'The exact title of the test that will check it.' },
         },
       },
     },
-    files: { type: 'array', items: { type: 'string' }, description: 'Paths you expect to touch, relative to the repository root.' },
+    files: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Paths you expect to touch, relative to the repository root.',
+    },
     checks: { type: 'array', items: { type: 'string' } },
     questions: {
       type: 'array',
@@ -36,7 +46,11 @@ const PLAN_SCHEMA = {
         type: 'object',
         required: ['id', 'text'],
         additionalProperties: false,
-        properties: { id: { type: 'string' }, text: { type: 'string' }, options: { type: 'array', items: { type: 'string' } } },
+        properties: {
+          id: { type: 'string' },
+          text: { type: 'string' },
+          options: { type: 'array', items: { type: 'string' } },
+        },
       },
     },
   },
@@ -57,7 +71,12 @@ function inside(root: string, file: unknown): boolean {
   if (typeof file !== 'string') return false;
   const abs = path.resolve(root, file);
   const rel = path.relative(root, abs);
-  return !rel.startsWith('..') && !path.isAbsolute(rel) && !rel.split(path.sep).includes('.deck') && !rel.split(path.sep).includes('.git');
+  return (
+    !rel.startsWith('..') &&
+    !path.isAbsolute(rel) &&
+    !rel.split(path.sep).includes('.deck') &&
+    !rel.split(path.sep).includes('.git')
+  );
 }
 
 export interface ClaudeWorkerOptions {
@@ -104,20 +123,26 @@ the files you expect to touch, the checks to run, and any questions whose answer
           tools: ['Read', 'Glob', 'Grep'],
           outputFormat: { type: 'json_schema', schema: PLAN_SCHEMA as unknown as Record<string, unknown> },
           canUseTool: async (name, input) =>
-            ['Read', 'Glob', 'Grep'].includes(name) && inside(pkg.worktree, (input.file_path ?? input.path ?? '.') as string)
+            ['Read', 'Glob', 'Grep'].includes(name) &&
+            inside(pkg.worktree, (input.file_path ?? input.path ?? '.') as string)
               ? { behavior: 'allow' as const, updatedInput: input }
-              : { behavior: 'deny' as const, message: 'Planning is read-only and confined to the repository.' },
+              : {
+                  behavior: 'deny' as const,
+                  message: 'Planning is read-only and confined to the repository.',
+                },
         },
       });
       for await (const message of run) {
         if (message.type === 'assistant') {
-          for (const part of message.message.content) if (part.type === 'text' && part.text.trim()) yield { type: 'text', text: part.text.trim() };
+          for (const part of message.message.content)
+            if (part.type === 'text' && part.text.trim()) yield { type: 'text', text: part.text.trim() };
         } else if (message.type === 'result') {
           if (message.subtype !== 'success') {
             yield { type: 'error', text: `Planning stopped: ${message.subtype}` };
             return;
           }
-          const raw = (message as { structured_output?: unknown }).structured_output ?? safeJson(message.result);
+          const raw =
+            (message as { structured_output?: unknown }).structured_output ?? safeJson(message.result);
           if (!raw) {
             yield { type: 'error', text: 'The planner did not return a plan.' };
             return;
@@ -136,8 +161,15 @@ the files you expect to touch, the checks to run, and any questions whose answer
 
   async *implement(pkg: WorkPackage, sandbox: Sandbox): AsyncIterable<AgentEvent> {
     const plan = pkg.plan;
-    const requirements = plan?.requirements.map((r, i) => `${i + 1}. ${r.text}${r.test ? `  (test: "${r.test}")` : ''}`).join('\n') ?? '';
-    const answers = plan?.questions.filter((q) => q.answer).map((q) => `- ${q.text}\n  Answer: ${q.answer}`).join('\n') ?? '';
+    const requirements =
+      plan?.requirements
+        .map((r, i) => `${i + 1}. ${r.text}${r.test ? `  (test: "${r.test}")` : ''}`)
+        .join('\n') ?? '';
+    const answers =
+      plan?.questions
+        .filter((q) => q.answer)
+        .map((q) => `- ${q.text}\n  Answer: ${q.answer}`)
+        .join('\n') ?? '';
     const prompt = `Implement this change in the working directory.
 
 # Change: ${pkg.title}
@@ -156,10 +188,19 @@ When you are done, reply with short notes: what you changed, and which code sati
     const tools = createSdkMcpServer({
       name: 'sandbox',
       tools: [
-        tool('run', 'Run a command inside the sandbox container, in the working directory. No network.', { command: z.string() }, async ({ command }) => {
-          const result = await sandbox.run(command);
-          return { content: [{ type: 'text' as const, text: `exit ${result.exitCode}\n${result.output.slice(-12_000)}` }] };
-        }),
+        tool(
+          'run',
+          'Run a command inside the sandbox container, in the working directory. No network.',
+          { command: z.string() },
+          async ({ command }) => {
+            const result = await sandbox.run(command);
+            return {
+              content: [
+                { type: 'text' as const, text: `exit ${result.exitCode}\n${result.output.slice(-12_000)}` },
+              ],
+            };
+          },
+        ),
       ],
     });
     const abort = new AbortController();
@@ -174,10 +215,17 @@ When you are done, reply with short notes: what you changed, and which code sati
           mcpServers: { sandbox: tools },
           canUseTool: async (name, input) => {
             if (name === 'mcp__sandbox__run') return { behavior: 'allow' as const, updatedInput: input };
-            if (['Read', 'Glob', 'Grep', 'Edit', 'Write'].includes(name) && inside(pkg.worktree, (input.file_path ?? input.path ?? '.') as string)) {
+            if (
+              ['Read', 'Glob', 'Grep', 'Edit', 'Write'].includes(name) &&
+              inside(pkg.worktree, (input.file_path ?? input.path ?? '.') as string)
+            ) {
               return { behavior: 'allow' as const, updatedInput: input };
             }
-            return { behavior: 'deny' as const, message: 'Outside the worktree, or not a permitted tool. Commands go through the sandbox run tool.' };
+            return {
+              behavior: 'deny' as const,
+              message:
+                'Outside the worktree, or not a permitted tool. Commands go through the sandbox run tool.',
+            };
           },
         },
       });
@@ -187,11 +235,15 @@ When you are done, reply with short notes: what you changed, and which code sati
             if (part.type === 'text' && part.text.trim()) yield { type: 'text', text: part.text.trim() };
             else if (part.type === 'tool_use') {
               const input = part.input as { file_path?: string; command?: string; pattern?: string };
-              yield { type: 'tool', text: `${part.name.replace('mcp__sandbox__', '')} ${input.file_path ?? input.command ?? input.pattern ?? ''}`.trim() };
+              yield {
+                type: 'tool',
+                text: `${part.name.replace('mcp__sandbox__', '')} ${input.file_path ?? input.command ?? input.pattern ?? ''}`.trim(),
+              };
             }
           }
         } else if (message.type === 'result') {
-          if (message.subtype !== 'success') yield { type: 'error', text: `The agent stopped: ${message.subtype}` };
+          if (message.subtype !== 'success')
+            yield { type: 'error', text: `The agent stopped: ${message.subtype}` };
           else yield { type: 'done', text: message.result };
         }
       }

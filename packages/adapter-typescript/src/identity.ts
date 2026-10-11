@@ -1,6 +1,6 @@
 // Identity (spec §4.2). Ids are opaque and assigned the first time an entity is seen.
 // Names, paths and line numbers are attributes that can change.
-import { type Id, hashId } from '@decker/deck-model';
+import { hashId, type Id } from '@decker/deck-model';
 
 export interface IdsFile {
   version: 1;
@@ -100,7 +100,12 @@ export function assignIds(entities: Entity[], prev: IdsFile, renames: Record<str
 
   return {
     idOf: (e) => byKey.get(fullKey(e))!,
-    ids: { version: 1, bindings: sortRecord(bindings), tombstones: sortRecord(tombstones), shapes: sortRecord(shapes) },
+    ids: {
+      version: 1,
+      bindings: sortRecord(bindings),
+      tombstones: sortRecord(tombstones),
+      shapes: sortRecord(shapes),
+    },
     suggestions,
   };
 }
@@ -115,7 +120,12 @@ export function confirmRename(ids: IdsFile, s: RenameSuggestion): IdsFile {
   if (shapes[s.newId]) shapes[s.id] = shapes[s.newId]!;
   delete shapes[s.newId];
   bindings[s.id] = s.to;
-  return { version: 1, bindings: sortRecord(bindings), tombstones: sortRecord(tombstones), shapes: sortRecord(shapes) };
+  return {
+    version: 1,
+    bindings: sortRecord(bindings),
+    tombstones: sortRecord(tombstones),
+    shapes: sortRecord(shapes),
+  };
 }
 
 function strip(path: string): string {

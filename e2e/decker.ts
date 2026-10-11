@@ -3,7 +3,7 @@ import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { type Page, expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { ready } from './helpers';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,7 +27,11 @@ export interface Deck {
 
 function launch(root: string, args: string[]): Promise<{ proc: ChildProcess; url: string }> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(process.execPath, [path.join(REPO, 'packages/server/bin/decker.mjs'), root, '--no-open', '--token', 'e2e', ...args], { cwd: REPO, stdio: ['ignore', 'pipe', 'pipe'] });
+    const proc = spawn(
+      process.execPath,
+      [path.join(REPO, 'packages/server/bin/decker.mjs'), root, '--no-open', '--token', 'e2e', ...args],
+      { cwd: REPO, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
     let out = '';
     const timer = setTimeout(() => reject(new Error(`decker did not start:\n${out}`)), 60_000);
     const onData = (chunk: Buffer) => {
@@ -48,12 +52,18 @@ function launch(root: string, args: string[]): Promise<{ proc: ChildProcess; url
 }
 
 /** Copy examples/shop into a fresh git repository and start decker on it. */
-export async function startDecker(name: string, options: { args?: string[]; setup?: (root: string) => void; source?: string } = {}): Promise<Deck> {
+export async function startDecker(
+  name: string,
+  options: { args?: string[]; setup?: (root: string) => void; source?: string } = {},
+): Promise<Deck> {
   const root = path.join(TMP, `${name}-${Date.now().toString(36)}`);
   mkdirSync(TMP, { recursive: true });
   cpSync(options.source ?? path.join(REPO, 'examples', 'shop'), root, {
     recursive: true,
-    filter: (src) => !/[\\/](node_modules|cache)$/.test(src) && !/[\\/]\.deck[\\/](ids|layout|notes)\.json$/.test(src) && !/[\\/]\.deck[\\/]changes$/.test(src),
+    filter: (src) =>
+      !/[\\/](node_modules|cache)$/.test(src) &&
+      !/[\\/]\.deck[\\/](ids|layout|notes)\.json$/.test(src) &&
+      !/[\\/]\.deck[\\/]changes$/.test(src),
   });
   options.setup?.(root);
   const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
@@ -84,7 +94,14 @@ export async function startDecker(name: string, options: { args?: string[]; setu
     await boot();
   };
   deck.api = async <T>(route: string, init: RequestInit = {}) => {
-    const res = await fetch(`${deck.origin}${route}`, { ...init, headers: { authorization: `Bearer ${deck.token}`, 'content-type': 'application/json', ...(init.headers ?? {}) } });
+    const res = await fetch(`${deck.origin}${route}`, {
+      ...init,
+      headers: {
+        authorization: `Bearer ${deck.token}`,
+        'content-type': 'application/json',
+        ...(init.headers ?? {}),
+      },
+    });
     if (!res.ok) throw new Error(`${route}: ${res.status} ${await res.text()}`);
     return (await res.json()) as T;
   };
@@ -123,7 +140,12 @@ export const idOf = (page: Page, name: string): Promise<string> =>
   }, name);
 
 /** Wait for a change in the tray to reach a state. */
-export async function waitForState(page: Page, title: RegExp | string, state: string, timeout = 150_000): Promise<void> {
+export async function waitForState(
+  page: Page,
+  title: RegExp | string,
+  state: string,
+  timeout = 150_000,
+): Promise<void> {
   const card = page.getByTestId('change').filter({ hasText: title });
   await expect(card.getByTestId('change-state')).toHaveText(state, { timeout });
 }
