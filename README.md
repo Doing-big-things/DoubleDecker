@@ -7,7 +7,7 @@ A programming system with two connected decks, like a double-decker bus.
 
 Edit the map (change a bullet, add a block, draw an arrow) and each edit becomes a task for an agent. The agent's result comes back as a visual diff on the same map, with evidence, for you to accept, revise or reject.
 
-The full design is in [double_decker_spec.md](double_decker_spec.md). This repository is the proof of concept it describes.
+The full design is in [double_decker_spec.md](double_decker_spec.md). This repository is the proof of concept it describes. The spec's "Build status" section says what is built, what has been verified and how, and what has not.
 
 ## Try it
 
@@ -24,7 +24,7 @@ npm run build
 npm run preview -w @decker/web
 ```
 
-Open http://localhost:4173. Add `?fixture=stress` for the 1,500-block stress map.
+Open http://localhost:4173. Add `?fixture=mid` for a 300-block map or `?fixture=stress` for a 1,500-block one.
 
 **The whole loop**, on the reference service:
 
@@ -43,13 +43,21 @@ The reference service ships with stored candidates, so the demo needs no API key
 
 The demo uses `--sandbox host`, which runs checks and agent commands directly on your machine with no isolation. It exists because the default sandbox needs Docker or Podman. See "What is not verified" below.
 
+**The same request, sent to a real model:**
+
+```bash
+npm run demo -- --worker claude --model claude-haiku-5-5 --effort medium
+```
+
+The worker signs in the way Claude Code does on your machine (`claude auth login`), or with `ANTHROPIC_API_KEY`. The stored candidates are left out of the copy, so the model cannot read the answer. On a host sandbox the model may run only the checks listed in `.deck/deck.json`.
+
 **Any other TypeScript repository:**
 
 ```bash
 node packages/server/bin/decker.mjs <path-to-repo>
 ```
 
-The map, search, code peek and editing work straight away. Sending a change to an agent then uses the Claude worker and a container sandbox, neither of which has been run yet.
+The map, search, code peek and editing work straight away. Sending a change to an agent then uses the Claude worker and a container sandbox.
 
 ## Around the map
 
@@ -64,6 +72,7 @@ The map, search, code peek and editing work straight away. Sending a change to a
 | Up one level | `Esc` |
 | Outline view | `Ctrl+\` |
 | Open in editor | `Ctrl+Enter` |
+| Move a block, or regroup it | Drag it. Dropping it on another area redraws it there and leaves the code where it is |
 | New block, rename, remove | `N`, `F2`, `Delete` |
 | Undo, redo | `Ctrl+Z`, `Ctrl+Shift+Z` |
 | All shortcuts | `?` |
@@ -79,7 +88,8 @@ packages/
   server/              the local server and the `decker` command
   web/                 the upper deck
 examples/shop/         the reference service, with stored demo candidates under demo/
-fixtures/              the hand-written design fixture and the stress fixture generator
+fixtures/              the hand-written design fixture, the generated ones, and measurements of real repositories
+scripts/               the demo, and tools to measure a repository and to check a map against its source
 e2e/                   end-to-end tests
 ```
 
@@ -94,22 +104,23 @@ npm run e2e
 
 | Suite | Covers |
 |---|---|
-| `e2e/canvas.spec.ts` | Zoom levels, the 11 px text floor, drilling in, tests chips, search, keyboard, outline, themes, every editing gesture, and the performance budgets |
+| `e2e/canvas.spec.ts` | Zoom levels, the 11 px text floor, drilling in, tests chips, search, keyboard, outline, themes, every editing gesture with stored reference images, regrouping by drag, and the performance budgets on maps of 42, 300 and 1,500 blocks |
 | `e2e/compile-up.spec.ts` | The real map, source peek and open-in-editor, harness-run test status, identical snapshots, live updates, identity across renames, summaries |
-| `e2e/change-loop.spec.ts` | The demo from request to acceptance, unrequested edits, deleted tests, parallel changes with a rebase, revert, and a server stopped mid-run |
+| `e2e/change-loop.spec.ts` | The demo from request to acceptance, tests on the new arrow, unrequested edits, deleted tests, parallel changes with a rebase, revert, and a server stopped mid-run |
+| `e2e/integration-tier.spec.ts` | The Supabase-backed store checked against a real project, with the key kept out of everything stored or shown. Skipped on a machine without `TestDB.env` |
+| `e2e/live-agent.spec.ts` | The demo request sent to a real model, with hostile instructions planted in the repository. Runs only with `DECKER_LIVE=1`, because it spends model usage |
 
-`node e2e/tour.mjs <dir>` saves screenshots of each stage of the demo.
+`node e2e/tour.mjs <dir>` saves screenshots of each stage of the demo. `node scripts/measure-repo.mjs <path>` measures a first map of any repository. `node scripts/sample-check.mjs <deck.json> <path>` prints a sample of a map beside the source lines it claims.
 
 ## What is not verified
 
-These parts are written and are not exercised by any test, because of what the development machine has:
+These parts are written and have not run to completion:
 
-- **The container sandbox.** The machine has no Docker or Podman. Every change-loop test runs in `--sandbox host` mode, so the code that runs Prepare, Implement and Check in containers with the network off has never executed.
-- **The Claude worker.** It uses the Claude Agent SDK, with file tools confined to the worktree and commands routed through the sandbox. No test calls a real model. The loop is tested with the stored-candidate worker.
-- **Hostile-instruction tests** (spec M4). They need both of the above.
-- **The test database** (spec §9.3) is not wired in. `TestDB.env` is git-ignored and nothing reads it.
+- **The container sandbox.** The development machine has no Docker or Podman. Every change-loop test runs in `--sandbox host` mode, so the code that runs Prepare, Implement and Check in containers with the network off has never executed.
+- **The Claude worker against a real model.** The one attempt stopped at sign-in, before any model call. The loop is otherwise tested with the stored-candidate worker.
+- **Hostile instructions** (spec M4). The test is written and is part of the live-agent suite. No model has met it yet.
 
-Other gaps against the spec are listed in its "Build status" section.
+Not built: the network allow-list for containers, the second demo in which an agent asks for a dependency and for network access, and a worker for other command-line agents.
 
 ## Credits
 

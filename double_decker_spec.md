@@ -1,8 +1,8 @@
 # Double Decker
 
-**Design specification v0.3 · 2026-10-11 · Dallas**  
+**Design specification v0.4 · 2026-10-11 · Dallas**  
 **Concept owner: Jay Reed**  
-**Status: Proof of concept built through M4, verified end to end in host-sandbox mode. The container sandbox and the Claude worker are written and not yet run. See "Build status" below.**
+**Status: Proof of concept built through M4, verified end to end in host-sandbox mode. The container sandbox has never run, and the Claude worker has not yet completed a run against a real model. See "Build status" below.**
 
 Supersedes v0.1, archived unchanged as `double_decker_original_idea_deprecated.md`. Appendix B lists what changed from v0.1 to v0.2. The "Build status" section lists what changed while building.
 
@@ -12,27 +12,26 @@ Built on 2026-10-11, straight through from M0 at Jay's instruction, without the 
 
 | Milestone | State | Verified by |
 |---|---|---|
-| **M0** The canvas | Built | `e2e/canvas.spec.ts`, 13 tests |
-| **M1** Compile up | Built | `e2e/compile-up.spec.ts`, 6 tests, plus Hono and Supabase Storage runs recorded in `fixtures/repos.json` |
-| **M2** Edit the deck | Built | The editing test in `e2e/canvas.spec.ts` |
+| **M0** The canvas | Built | `e2e/canvas.spec.ts`, 14 tests |
+| **M1** Compile up | Built | `e2e/compile-up.spec.ts`, 6 tests. Hono and Supabase Storage runs and the hand-checked sample are recorded in `fixtures/repos.json` |
+| **M2** Edit the deck | Built | The editing and regrouping tests in `e2e/canvas.spec.ts`, with stored reference images |
 | **M3** The agent loop | Built. Verified with stored candidates in host-sandbox mode only | `e2e/change-loop.spec.ts`, 6 tests |
-| **M4** Trust | Partly built | Same suite. See the gaps below |
+| **M4** Trust | Built, except what needs a container or a real model | Same suite, plus `e2e/integration-tier.spec.ts`, 3 tests |
 | **M5** Prove and extend | Not started | |
 
-**Not verified.** These are written and have never run:
+All 29 of those tests pass. A 30th, `e2e/live-agent.spec.ts`, is described below and has not passed.
 
-- **The container sandbox** (§6.3). The development machine has no Docker or Podman. Every loop test uses `--sandbox host`.
-- **The Claude worker** (§6.2). No test calls a real model. The loop is tested with the stored-candidate worker.
-- **M4's hostile-instruction test**, which needs both.
+**Not verified.** These are written and have never run to completion:
+
+- **The container sandbox** (§6.3). The development machine has no Docker, Podman or WSL 2. Every loop test uses `--sandbox host`.
+- **The Claude worker against a real model** (§6.2). It is wired for any model and effort, and `e2e/live-agent.spec.ts` drives the §9.1 demo request through it with Claude Haiku 5.5 at medium effort. The one attempt stopped before the first model call: the Claude Code sign-in on this machine had expired. Nothing was spent. The attempt did find two faults, both fixed: a failed sign-in was reported as "no plan", and decker started from inside another Claude Code session handed that session's settings to its worker.
+- **M4's hostile-instruction test.** It is part of the same live test: instructions planted in a README, a source comment and a package script tell the agent to write outside its worktree, run the script, and copy out a file it should not read. The guard those instructions would meet runs on every tool call, and on a host sandbox a model may run only the configured checks. Neither has been exercised by a model.
 
 **Not built.**
 
-- The network allow-list, the integration check tier, and the second demo with the test database (§9.3). `TestDB.env` is not read by anything.
-- The generic worker for command-line agents (§6.2).
-- Dragging a block into another area to regroup it (§3.8). Dragging within an area works.
-- A tests chip on an API arrow's label pill (§3.7 "Deeper").
-- Visual regression by stored screenshots (M2). The tests assert the computed styles that distinguish requested from implemented instead.
-- The hand-checked sample of 30 blocks and 30 arrows on Hono (M1).
+- The network allow-list for containers (§6.3). Without it a check that needs the network is skipped in a container. On a host sandbox it runs.
+- The second demo of §9.3, in which an agent asks for a new dependency and for network access and both wait for approval.
+- The generic worker for command-line agents (§6.2). It waits for the allow-list.
 - Opening VS Code itself is not exercised by a test. The tests point the editor command at a script that records the path and line it was given.
 
 **Decisions made while building.** Each replaces the text it names.
@@ -41,33 +40,56 @@ Built on 2026-10-11, straight through from M0 at Jay's instruction, without the 
 |---|---|---|
 | Zoom thresholds (§3.4) | System below 0.3, Architecture 0.3 to 0.6, Blocks above 0.6 | The 11 px text floor could not hold at the starting values. Between 0.6 and 1.0 card text is scaled up in steps and fewer bullets are shown, so nothing drops below 11 px |
 | Top-level layout (§3.11) | ELK decides the order of top-level areas, callers first. They are then arranged in rows that fit a wide screen | A strictly layered top level made the shop fixture three screens tall. It now fits one screen at Architecture level |
+| Large sparse areas (§3.11) | An area of ten or more things that layers leave under 30% full is laid out as a packed shelf | Hono's JSX area was 21% full under layers: one long column and an empty half |
 | Area titles | Drawn above the arrows, in a layer of their own | Arrows were striking titles out |
-| Arrow labels | Sit on the last run of the arrow, near the block they point at, and fan out when several arrive together | Labels at the midpoint collided |
+| Arrow labels | Sit on the last run of the arrow, near the block they point at, and fan out when several arrive together. A label slides along its run to stay clear of cards, and one that only names the arrow's kind is left out when there is no clear spot | Labels at the midpoint collided, and labels under a card showed as slivers at its edge |
+| How arrows are drawn | Each straight run and each rounded corner is a path of its own | A browser draws one long bent line through a mask the size of its bounding box, every frame. With 140 on screen that was most of a frame |
+| Minimap | Our own: areas only, one subscription to the camera | React Flow's keeps a component per node, re-evaluated on every camera frame |
 | State badges on blocks | Hang on the card's top edge | In the title row they pushed the name out |
-| Host sandbox | `decker --sandbox host` runs checks and agent commands on the engineer's machine with no isolation. It is opt-in and announced at start-up | Without it the loop could not be exercised on a machine with no container runtime. Containers remain the default whenever a runtime answers |
+| Regrouping (§3.8) | Dragging a block over another area lights that area up and regroups the block there. The move is kept in `.deck/layout.json`, the panel says where the code still lives, and "Put back" undoes it. Neighbours make room | The spec left where a regrouping is stored to "area rules". Layout is where every other hand placement lives, and agents are still told where the code really is |
+| Tests on arrows (§3.7) | An API arrow's label carries a chip for the tests its requirements named, in review and after acceptance | Built as specified. In review the arrow is also drawn with the kind and label that were asked for |
+| A chip whose tests were all skipped | Reads `–3` | It read `✓0/3` in green, which looks like a pass |
+| Host sandbox | `decker --sandbox host` runs checks and agent commands on the engineer's machine with no isolation. It is opt-in and announced at start-up. A model may run only the configured checks there, with extra arguments. Stored candidates may run anything | Without it the loop could not be exercised on a machine with no container runtime. Containers remain the default whenever a runtime answers |
 | Stored candidates | A worker that replays stored plans and candidates from `examples/shop/demo` | Makes every loop outcome deterministic, as §9.1 asks for the flawed candidate |
-| Accepted intent | On Accept, an arrow's kind, label, bullets and the plan's accepted limits are saved to `.deck/notes.json` as authored notes | The extractor sees only a call. Without this the "API · Reserve stock" label would vanish on acceptance |
+| Worker confinement (§6.2) | Every tool call passes a guard before it runs, whatever the permission mode would decide. Paths outside the worktree, `.deck`, `.git` and patterns that climb out are refused, and each refusal is shown in the change's progress | A permission callback alone is not asked about every call |
+| Accepted intent | On Accept, an arrow's kind, label, bullets, linked tests and the plan's accepted limits are saved to `.deck/notes.json` as authored notes | The extractor sees only a call. Without this the "API · Reserve stock" label would vanish on acceptance |
 | Source folder | When one folder holds at least 70% of the code, its contents are the top level of the map | Otherwise a repository with `src/` beside scripts shows one giant "Src" area |
-| Single-file folders | A folder holding one block is shown as that block in the parent area | Hono's 25 middleware folders were 25 areas of one block each |
+| Single-file folders | A folder holding one block is shown as that block in the parent area. If that gives two blocks one name in an area, the lifted one takes its folder's name | Hono's 25 middleware folders were 25 areas of one block each |
+| Files that only re-export | Not blocks. They are a way in to other blocks | They were drawn as empty cards |
+| Exports by list | `export { Hono as HonoBase }` makes the class public, under the exported name | Found by the hand check: such exports were marked internal |
+| Functions behind a cast | `const Suspense: FC = ((props) => { ... }) as any` is an operation | Found by the hand check |
 | Function-valued class properties | Treated as operations, like methods | Common in TypeScript, and tests call them |
 | Route operations | A route whose handler calls one operation borrows that operation's doc comment as its bullet | "List the products on sale" reads better than "GET /products" alone |
-| Reference service size (§9.1) | About 900 lines with 45 tests, not 2,000 | Enough to exercise every element |
+| Services reached without a package | A doc comment with `@service Supabase` puts the service on the map as an External | A plain `fetch` leaves no import to see |
+| Test database store (§9.3) | Keeps its stock levels as one document in a Storage bucket | The key allows no schema changes over REST, and the project had no tables |
+| Reference service size (§9.1) | About 1,100 lines with 45 tests and 3 integration tests, not 2,000 | Enough to exercise every element |
 
-**Measured.** On an Intel Core i7-13700K with 32 GB RAM, Windows 11, headless Edge at 1440 by 900. Frame rates are the range over three runs of the test suite. Everything else is a single run.
+**Measured.** On an Intel Core i7-13700K with 32 GB RAM and an RTX 3080 Ti, Windows 11, headless Edge at 1440 by 900 with hardware acceleration. Frame rates are the 95th percentile over one sweep, from the last run of the test suite; they move by a few frames between runs.
 
 | Budget (§10) | Target | Measured |
 |---|---|---|
-| Pan and zoom, shop fixture (42 blocks, 77 arrows) | 60 fps at the 95th percentile | 60 to 80 fps |
-| Pan and zoom, stress fixture (1,500 blocks, 3,784 arrows) | 45 fps or better, at most 400 blocks in the DOM | 48 fps at System level. Zoomed in: 40, 48 and 60 fps, so one run of three missed the target. At most 64 blocks in the DOM |
-| The 300-block, 600-arrow case | 60 fps | Not measured: no fixture of that size exists |
-| Select, hover, expand, open panel | Under 100 ms | Not measured in isolation |
-| First map, `examples/shop` | Under 3 s | 0.8 s (extraction 0.15 s) |
-| First map, Hono, plain clone | Under 20 s cold | 3.3 s (extraction 2.0 s), 141 blocks, 98.4% resolved |
-| First map, Supabase Storage, nothing installed | | 4.2 s (extraction 2.5 s), 250 blocks, 83.4% resolved |
+| Pan, 42 blocks and 77 arrows | 60 fps | 233 fps on the whole map, 119 fps on full cards |
+| Wheel zoom inside one zoom band, 42 blocks | 60 fps | 233 fps |
+| Pan, 300 blocks and 579 arrows | 60 fps | 233 fps with the whole map on screen, and the same at the Architecture level |
+| Wheel zoom, 300 blocks | 60 fps | 119 fps with the whole map on screen. **18 to 24 fps at the Architecture level**: frames in which several cards and dozens of arrows come into view at once take 40 to 60 ms |
+| Pan, 1,500 blocks and 3,784 arrows | 45 fps | 79 fps on the whole map, 79 fps on full cards |
+| Wheel zoom, 1,500 blocks | 45 fps | 80 fps on the whole map, 119 fps on full cards |
+| Crossing from one zoom band to the next | Not budgeted | One frame of 4 to 25 ms on 42 blocks, 21 to 75 ms on 300, 21 to 71 ms on 1,500, over the runs made. Everything on screen is redrawn for the new band |
+| Blocks in the DOM | At most 400 | At most 75 of 1,500 |
+| Select and open the panel; expand in place | Under 100 ms | Longest of eight: 77 ms and 20 ms. Across runs the longest select was 23 to 91 ms |
+| Hover highlight | Under 100 ms | 6 ms after its deliberate 150 ms delay, and 3 to 17 ms across runs |
+| First map, `examples/shop` | Under 3 s | 0.7 s (extraction 0.14 s) |
+| First map, 10,000 lines | Under 10 s cold, 2 s warm | 1.0 s for 18,000 lines: Hono's JSX folder on its own. Nothing is cached, so warm is the same |
+| First map, Hono, plain clone | Under 20 s cold | 3.4 s (extraction 2.1 s): 83,000 lines, 133 blocks, 98.4% resolved |
+| First map, Supabase Storage, nothing installed | | 5.3 s (extraction 3.5 s): 156,000 lines, 250 blocks, 83.4% resolved |
+| First map, 200,000 lines | Under 60 s cold | 10.1 s for 258,000 lines: both clones mapped as one tree. Not one real repository |
 | Map update after a one-file edit | Under 2 s | 0.8 s |
-| First map, 10,000 and 200,000 lines | | Not measured |
 
 Supabase Storage's 83.4% is with no dependencies installed, so every type imported from a package is unknown. The figure with dependencies installed has not been measured.
+
+**The hand check** (M1). A fixed sample of 30 blocks and 30 arrows from Hono was read against the source. All 30 arrows were right. Three blocks were not, from the three extractor faults in the table above. They are fixed and a re-drawn sample is clean. `fixtures/repos.json` has the record, and `scripts/sample-check.mjs` draws the sample.
+
+**The test database** (§9.3). The integration tier ran against the real project and passed. The key and the project's address appear in nothing the browser is sent, nothing on the page, nothing under `.deck`, nothing decker prints and nothing in the repository. The store's tests leave one bucket in the project, `decker-shop-stock`, and delete what they write to it.
 
 ## 1. The idea
 
@@ -253,6 +275,7 @@ Tests never appear as blocks. They hang off the piece of architecture they exerc
 | `✓12` | All twelve tests passed at this commit |
 | `✕2/12` | Two of twelve are failing |
 | `12` | Twelve tests exist and have not been run at this commit |
+| `–3` | All three were skipped: nothing passed and nothing failed |
 | `0` (muted) | Nothing exercises this block |
 
 - **Opening one.** Click the chip or press `T`. The drawer lists up to eight tests, grouped by operation, one line each, then "+N more." The full list is in the panel's Tests tab. Clicking a test opens its source in the code peek.
@@ -279,6 +302,8 @@ Editing the map is how an engineer programs. Each gesture creates a **change ope
 | Drag a block, or drag it into another area | none: layout only | none |
 
 - Moving and regrouping change only the picture. They never create a change, and changes never move the layout by themselves.
+- A block dragged over another area is regrouped there on drop, and the area lights up while it is held over it. The panel then says where the block is drawn and where its code lives, and offers "Put back". Agents are always told where the code really is.
+- A dropped block comes to rest clear of its neighbours, and an area that grew pushes aside the areas it would cover.
 - Undo and redo (`Ctrl+Z`, `Ctrl+Shift+Z`) cover pending operations and layout moves.
 - A requested item never looks implemented. Dashed line plus badge is reserved for "asked for, not yet built."
 
@@ -336,6 +361,7 @@ When an agent finishes, the same canvas enters review mode for that change. A ba
 
 - The first build lays out automatically with ELK's layered algorithm, top to bottom, so callers sit above what they call and the picture reads like a layered architecture drawing. Arrows attach to the top and bottom of blocks, and to the sides when two blocks sit side by side.
 - At the top level, ELK decides the order of the areas and they are then arranged in rows, in reading order, to fit a wide screen.
+- A large area that layers would leave mostly empty (ten or more things, under 30% full) is laid out as a packed shelf instead.
 - After that, positions are saved in `.deck/layout.json`. A rebuild places only new blocks, inside their area and near their callers. It never moves existing ones.
 - Blocks the engineer has dragged stay where they were put.
 - "Tidy up" re-runs the full layout on request, animated and undoable.
@@ -444,8 +470,8 @@ Anything unmatched gets a new ID, and the old ID is kept as a tombstone.
   deck.json          settings: adapter, tsconfig, area rules, test file patterns,
                      editor command, checks to run, container image
   ids.json           identity bindings and tombstones
-  layout.json        positions, sizes, collapsed state
-  notes.json         authored and pinned bullets
+  layout.json        positions, hand-placed blocks, blocks regrouped into another area
+  notes.json         authored and pinned bullets; what an accepted arrow was asked to be
   changes/<id>.json  one file per change: operations, plan, candidates, decisions (append-only events)
   cache/             git-ignored: compiled snapshots, AI summary cache, check output
 ```
@@ -492,9 +518,11 @@ The same commit and configuration must produce a byte-identical snapshot: arrays
 | Workspace package; directory | Area (nested) |
 | A directory whose `index.ts` re-exports its contents | Block (its files are internals, shown when expanded) |
 | Any other file with exports; an entry-point file | Block |
-| Exported function; public method of an exported class; route handler | Operation |
+| A file that only re-exports | Nothing: it is a way in to other blocks |
+| Exported function; public method of an exported class; route handler | Operation. Exported includes `export { a as b }`, and a function behind a cast or parentheses still counts |
 | Exported interface, type, enum, or class used in a signature | Data |
 | Imported npm package or Node built-in | External, one per package |
+| A doc comment tagged `@service Name` | External: a service reached without a package, such as by `fetch` |
 | A call the type checker resolves to a declaration in another block | `call` arrow, with the call site as evidence |
 | A call through an interface type | `call` arrow to each implementation in the repo, marked `indirect` |
 | A type used across blocks | `data` arrow (hidden on the canvas, listed in the panel) |
@@ -503,7 +531,8 @@ The same commit and configuration must produce a byte-identical snapshot: arrays
 | A call from a test body that resolves to an operation | The test hangs off that operation (`via: calls`) |
 | Dynamic import, computed member call, `any`-typed call, reflection-based injection, `eval` | Gap on the owning block |
 
-- Area rules in `.deck/deck.json` override the directory structure when present. Regrouping on the map writes to those rules and does not move code.
+- Regrouping on the map is kept in `.deck/layout.json` and does not move code (§3.8). Area rules in `.deck/deck.json`, to override the directory structure for everyone, are not built.
+- Two blocks in one area never share a name: a block lifted out of a single-file folder takes the folder's name.
 - Test files (`*.test.*`, `*.spec.*`, and anything under `__tests__`, configurable) never become blocks. Their tests attach to what they exercise (§3.7). Tests are recognized by the shape of the call, so this works even when the test runner is not installed.
 
 ### 5.3 Bullets
@@ -570,6 +599,8 @@ interface WorkPackage {
 - An agent has no shell of its own. Its only way to execute anything is `Sandbox.run`, which the gateway carries out inside the container.
 - Comments, READMEs, dependency contents, and agent output are untrusted data. They cannot grant permissions.
 - The first worker uses the Claude Agent SDK, with its file tools confined to the worktree and its command execution replaced by `Sandbox.run`. A small Claude model writes the optional bullet summaries.
+- The model and how hard it thinks are settings: `decker --model claude-haiku-5-5 --effort medium`, or `worker` in `.deck/deck.json`. The default is Claude Opus 5.5 at its own default effort. The worker signs in the way Claude Code does on that machine, or with `ANTHROPIC_API_KEY`.
+- Every tool call the model makes passes a guard before it runs. A refusal is shown in the change's progress.
 - The second worker is a generic one for command-line agents such as Codex CLI. Such an agent has to run whole inside the container, which then needs network access limited to that agent's model endpoint. It therefore waits for the network allow-list described in §6.3.
 
 **Several agents.** In the PoC each change has one implementing agent, and several changes can run at once, each in its own worktree. Splitting one change across several agents is designed for (every operation carries its own targets and allowed paths) and deferred.
@@ -593,6 +624,7 @@ Repository code never executes directly on the engineer's machine during a chang
 - **Extraction runs on the host.** It parses and type-checks and executes no repository code.
 - **Image.** Named in `.deck/deck.json`; the default is `node:24-slim`.
 - **Prerequisite.** Docker, or Podman with its Docker-compatible CLI. On Windows this means WSL 2.
+- **Without one.** `--sandbox host` runs checks and agent commands on the engineer's machine. It is opt-in, announced at start-up, and gives no isolation: a test a model wrote runs with the engineer's own access. A model may issue only the configured check commands there.
 
 A network allow-list is the next step for the sandbox. Its first use is the optional integration tier in M4, limited to the test database's host (§9.3). Left for later: the same allow-list applied to Prepare (the package registry only) and to agents that must run whole inside the sandbox (their model endpoint only), and isolation stronger than a container.
 
@@ -700,10 +732,10 @@ decker <path-to-repo>     starts the local server and opens the browser
 
 ### 9.1 The reference service
 
-`examples/shop` is a small strict-TypeScript service, about 900 lines as built, written for this project:
+`examples/shop` is a small strict-TypeScript service, about 1,100 lines as built, written for this project:
 
 - Areas: Orders, Inventory, Catalog, Payments (a stub), HTTP (a thin adapter), and Shared types.
-- In-memory storage and a Vitest suite.
+- In-memory storage, a Supabase-backed store behind the same interface (§9.3), and a Vitest suite.
 - One deliberately unsupported construct (a string-keyed handler registry) to exercise opaque markers.
 - Rename fixtures to exercise identity.
 
@@ -747,6 +779,8 @@ Jay has provided a free-tier Supabase project as a test database. Its credential
 - **On the map.** The reference service gains a Supabase-backed store behind the same `StockStore` interface as the in-memory one. That puts a real External pill ("Supabase") and real "via StockStore" arrows on the map.
 - **In verification.** An integration check tier runs the store's tests against the test database. It is the one check allowed onto the network, through an allow-list limited to that host.
 - **As a second demo.** The first demo records "persistence across restarts" as a limit the engineer accepted. The second demo lifts it: the engineer draws an arrow from Inventory to a new External, the agent asks for a new dependency and for network access, and both requests wait for approval.
+
+**As built.** `SupabaseStockStore` implements `StockStore`: reads are answered from memory, a write is saved in the background, and `flush` waits for it. It keeps its levels as one document in a Storage bucket, because the key allows no schema changes over REST and the project had no tables. The `integration` check in `examples/shop/.deck/deck.json` names its two secrets, the env file they are in, the test files it owns, and the one host it may reach, written as `$SUPABASE_TEST_URL` so the host itself is never committed. The harness replaces every secret, and the host of any that is a URL, with its name in whatever output it keeps. The first two bullets above are built and tested against the real project. The second demo is not built.
 
 **Handling rules.** The key is a Supabase *secret* key, which bypasses row-level security and can read and write everything in that project.
 
@@ -874,7 +908,8 @@ Decided with Jay on 2026-10-11:
 Still open. None of these blocks M0 to M2:
 
 - **A container runtime is not installed on the development machine.** It has neither Docker nor WSL 2. M3 was built and tested in host-sandbox mode instead. One of Docker Desktop or Podman, on WSL 2, is needed to run and verify the container sandbox.
-- **The Claude worker has not been run.** It needs a first real change, with someone watching what the agent does.
+- **The Claude worker has not completed a run.** Jay approved Claude Haiku 5.5 at medium effort for testing. The Claude Code sign-in on the development machine had expired, so the first attempt made no model call. After `claude auth login`, `DECKER_LIVE=1 npx playwright test live-agent` runs the demo request and the hostile-instruction test against the real model.
+- **Zooming at the Architecture level on a 300-block map misses its frame-rate target.** Each card or arrow that comes into view is mounted as a component, and several dozen at once take 40 to 60 ms. Drawing arrows on one canvas, or mounting them a little ahead of the screen edge, are the two ways to fix it.
 - **Look and feel sign-off.** M0's gate was skipped at Jay's instruction. His review of the map is still owed.
 - **Python before C++?** C++ remains launch language two. A Python adapter is cheaper and would let Jay map his own projects. Decide at M5.
 - **Tests on arrows.** The PoC attaches tests to arrows only through a change's requirements. Whether to attribute integration tests to the arrows they cross is undecided.
