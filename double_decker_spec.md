@@ -1,6 +1,6 @@
 # Double Decker
 
-**Design specification v0.5 · 2026-10-11 · Dallas**  
+**Design specification v0.6 · 2026-10-12 · Dallas**  
 **Concept owner: Jay Reed**  
 **Status: Proof of concept built through M4, with the simple view on top (§3.13), verified end to end in host-sandbox mode. The container sandbox has never run, and no real model has run: not the Claude worker, and not a summarizer writing the simple view's words. See "Build status" below.**
 
@@ -8,7 +8,7 @@ Supersedes v0.1, archived unchanged as `double_decker_original_idea_deprecated.m
 
 ## Build status
 
-Built on 2026-10-11, straight through from M0 at Jay's instruction, without the M0 sign-off pause. The look and feel is therefore still open to his review, and nothing below depends on it staying as it is.
+Built on 2026-10-11, straight through from M0 at Jay's instruction, without the M0 sign-off pause. Jay has since reviewed it twice. The first review asked for the simple view (§3.13). The second, on 2026-10-12, asked for the look in §3.10: friendlier, after a reference diagram he supplied. The look and feel stays open to his review, and nothing below depends on it staying as it is.
 
 | Milestone | State | Verified by |
 |---|---|---|
@@ -17,10 +17,10 @@ Built on 2026-10-11, straight through from M0 at Jay's instruction, without the 
 | **M2** Edit the deck | Built | The editing and regrouping tests in `e2e/canvas.spec.ts`, with stored reference images |
 | **M3** The agent loop | Built. Verified with stored candidates in host-sandbox mode only | `e2e/change-loop.spec.ts`, 6 tests |
 | **M4** Trust | Built, except what needs a container or a real model | Same suite, plus `e2e/integration-tier.spec.ts`, 3 tests |
-| **Simple view** (§3.13) | Built, after Jay's review of M0 to M4: the full map was more than the top level should show | `e2e/simple.spec.ts`, 9 tests on the fixture. `e2e/simple-loop.spec.ts`, 4 tests on real code with a real server |
+| **Simple view** (§3.13) | Built, after Jay's review of M0 to M4: the full map was more than the top level should show | `e2e/simple.spec.ts`, 10 tests on the fixture. `e2e/simple-loop.spec.ts`, 4 tests on real code with a real server |
 | **M5** Prove and extend | Not started | |
 
-All 43 of those tests pass. A 44th, `e2e/live-agent.spec.ts`, is described below and has not passed.
+All 44 of those tests pass. A 45th, `e2e/live-agent.spec.ts`, is described below and has not passed.
 
 **Not verified.** These are written and have never run to completion:
 
@@ -72,11 +72,20 @@ All 43 of those tests pass. A 44th, `e2e/live-agent.spec.ts`, is described below
 | Common ground | A part that at least three others and 60% of the rest use, and that uses at most a quarter as many itself, is drawn as a bar beneath the rest with no lines to it | On the reference service five of the six lines went to "Shared", and said nothing |
 | Wiring | A connection in which one part only constructs the other's objects is not drawn | The HTTP area builds every other area at start-up. That is assembly, not something one asks of another |
 | How many connections | When there are more than ten and more than one and a half per part, the busiest are drawn, every part keeps its busiest, and the controls say how many of how many | The 1,500-block fixture has 24 parts and 157 connections between them |
-| Simple layout | Layers, top-down or left-to-right, whichever shows the picture larger on a 16:9 screen. Rows in reading order when a chain or a crowd would make layers screens long. ELK routes each line around the cards and keeps room on it for its label | Six cards in layers fit a laptop screen at 82%. A chain of six in layers fitted at 38% |
+| Simple layout | Layers, top-down or left-to-right, whichever shows the picture larger on a 16:9 screen. Rows in reading order when a chain or a crowd would make layers screens long. ELK routes each line around the cards and keeps room on it for its label | Six cards in layers fit a laptop screen at 80% (82% before the lines had marks and pills). A chain of six in layers fitted at 38% |
 | A requested connection | Drawn over the arrangement on the plainest path that crosses no card. It is left out of the layout | Laying it out moved every card and took the picture from 82% to 59%, for one sentence typed |
 | Zoom in the simple view | Steps of 4%, with text drawn just large enough to stay at 11 px and as many lines as fit | With the advanced view's bands, a card lost every line at once just below the size it is first shown at |
 | The panel and a double-click | A click on a part opens the panel a quarter of a second later | The panel slid under the second click of the double-click that opens a part |
 | Listening for updates | The browser starts listening before it loads the map and applies what arrived in between | A summarizer's answer that landed between the two was lost, on two of the three runs made before the fix |
+| The look (§3.10) | A soft slate ground in place of near-black, and one gentle color for each area. In the simple view a line leaves through a ring and arrives in a disc with a chevron, and its words sit on a pill | Jay, on seeing the simple view: much closer, and it should look like a reference diagram he attached, "friendly and clear with lots of good information in how lines look and their start and end point icons", in colors that are "friendly and pleasant without being too harsh and bright" |
+| Area colors | Eight hues at one lightness and one strength, in OKLCH. The same color outlines a part, tints the blocks of an area, and rings the start of every line a part draws | In HSL, equal numbers do not give equal colors: at the same settings an amber is far lighter than a blue |
+| No amber or red area | The palette of area colors keeps clear of amber and red | An area that drew amber looked asked for: its outline, its bullets and the rings on its lines were the color of a request |
+| A part's fill | The ground with 16% of the part's color in it, not a lighter surface | On a lighter tinted surface a part's second line of text fell to 4.1:1 |
+| The marks at a line's ends | Drawn in the layer that labels are in, above the cards | Half of each mark lies inside a card, and cards are drawn over lines |
+| Where a requested line ends | At a free place on the card's side, 30 px or more from any other line's end. It runs behind no label when another way is open | Its end landed exactly on a built line's end, and its dashes ran behind that line's label |
+| A request between two stacked parts | The line and its label sit near the cards' right-hand ends, and stacked cards stand 48 px apart | In the middle, the label covered the flag that hangs on the lower card's top left corner |
+| Labels with no room to move | Placed first. Labels on longer runs then slide clear of them | On the 300-block fixture two labels lay one on the other, where a short straight line met a long one |
+| A reveal that came late | The pan that keeps a chosen part in sight once its panel has opened is dropped if the selection or the view has changed by then | It stopped the camera halfway to a search result in the other view. The test for that journey failed two runs in three once the timing shifted |
 
 **Measured.** On an Intel Core i7-13700K with 32 GB RAM and an RTX 3080 Ti, Windows 11, headless Edge at 1440 by 900 with hardware acceleration. Frame rates are the 95th percentile over one sweep, from the last run of the test suite; they move by a few frames between runs.
 
@@ -86,12 +95,12 @@ All 43 of those tests pass. A 44th, `e2e/live-agent.spec.ts`, is described below
 | Wheel zoom inside one zoom band, 42 blocks | 60 fps | 233 fps |
 | Pan, 300 blocks and 579 arrows | 60 fps | 233 fps with the whole map on screen, and the same at the Architecture level |
 | Wheel zoom, 300 blocks | 60 fps | 119 fps with the whole map on screen. **18 to 34 fps at the Architecture level** over the runs made: frames in which several cards and dozens of arrows come into view at once take 40 to 60 ms |
-| Pan and wheel zoom, simple view of the shop fixture | 60 fps | 238 fps and 233 fps |
-| Pan, 1,500 blocks and 3,784 arrows | 45 fps | 79 fps on the whole map, 79 fps on full cards |
-| Wheel zoom, 1,500 blocks | 45 fps | 80 fps on the whole map, 119 fps on full cards |
-| Crossing from one zoom band to the next | Not budgeted | One frame of 4 to 25 ms on 42 blocks, 21 to 75 ms on 300, 21 to 71 ms on 1,500, over the runs made. Everything on screen is redrawn for the new band |
+| Pan and wheel zoom, simple view of the shop fixture | 60 fps | 233 fps and 233 fps |
+| Pan, 1,500 blocks and 3,784 arrows | 45 fps | 233 fps on the whole map, 119 fps on full cards. An earlier run recorded 79 fps for both |
+| Wheel zoom, 1,500 blocks | 45 fps | 233 fps on the whole map, 120 fps on full cards. An earlier run recorded 80 fps on the whole map |
+| Crossing from one zoom band to the next | Not budgeted | One frame of 4 to 25 ms on 42 blocks, 13 to 75 ms on 300, 21 to 71 ms on 1,500, over the runs made. Everything on screen is redrawn for the new band |
 | Blocks in the DOM | At most 400 | At most 75 of 1,500 |
-| Select and open the panel; expand in place | Under 100 ms | Longest of eight: 77 ms and 20 ms. Across runs the longest select was 23 to 91 ms |
+| Select and open the panel; expand in place | Under 100 ms | Longest of eight: 20 ms and 16 ms. Across runs the longest select was 17 to 91 ms |
 | Hover highlight | Under 100 ms | 6 ms after its deliberate 150 ms delay, and 3 to 17 ms across runs |
 | First map, `examples/shop` | Under 3 s | 0.7 s (extraction 0.14 s) |
 | First map, 10,000 lines | Under 10 s cold, 2 s warm | 1.0 s for 18,000 lines: Hono's JSX folder on its own. Nothing is cached, so warm is the same |
@@ -343,7 +352,9 @@ When an agent finishes, the same canvas enters review mode for that change. A ba
 
 ### 3.10 Visual language
 
-**Dark-first.** The map is designed in dark mode first, like an IDE. Depth is shown with lighter surfaces, not shadows.
+**Dark-first, and never black.** The map is designed in dark mode first, on a soft slate ground. Depth is shown with lighter surfaces and with color, not shadows.
+
+**Friendly before clever.** Rounded cards, one gentle color for each area, light lines, and round marks where a line starts and ends. Nothing on the map is harsh or loud: every area color has the same lightness and the same strength, so areas differ in color and never in volume.
 
 **One rule above the rest: line pattern shows state, and the label shows kind.** Dashes always mean "requested," so they are never used to distinguish kinds of arrow.
 
@@ -355,24 +366,31 @@ When an agent finishes, the same canvas enters review mode for that change. A ba
 | Bullets and summary | 12.5 / 18 regular |
 | Signatures | 12 / 18 mono |
 | Spacing grid | 4 px; blocks snap to 8 px |
-| Block | 280 px wide, 12 px padding, 10 px radius, 1 px border, no shadow at rest |
-| Area | 16 px radius, 24 px padding, fill at 6% of its hue, 1 px border |
+| Canvas | `#2C3047`. In the advanced view, a 24 px dot grid that fades out below 0.5 zoom. In the simple view the ground is plain |
+| Chrome, surface, border | `#262A3E`, `#353A54`, `#474E6B` |
+| Text, muted text, faint text | `#F3F4FA`, `#BCC2D8`, `#A3AAC4` |
+| Accent | `#8FA6FF` |
+| Requested, candidate, contradicted, unrequested, passing | `#F3C06C`, `#6FB8FF`, `#FFA8A3`, `#C8A8FF`, `#66D3A4` |
+| Area colors | OKLCH lightness 0.80 and chroma 0.10 at eight hues: 258, 302, 192, 128, 350, 226, 160, 324 (blue, violet, teal, lime, pink, sky, green, orchid). None is amber or red |
+| Area | 16 px radius, 24 px padding, fill at 7% of its color, 1.5 px border at half strength |
+| Block | 280 px wide, 12 px padding, 10 px radius, 1 px border, no shadow at rest. The surface with 8% of its area's color, outlined with a third of it |
 | Gaps | At least 24 px between blocks, 48 px between areas |
-| Canvas | `#0E0F12`, with a 24 px dot grid that fades out below 0.5 zoom |
-| Block surface, border | `#17191D`, `#2A2D34` |
-| Text, muted text | `#E8EAED`, `#9AA0AA` |
-| Accent | `#7C8CFF` |
-| Requested, candidate, contradicted, unrequested, passing | `#F2B84B`, `#5AA9FF`, `#FF6B6B`, `#B48CFF`, `#4CC38A` |
-| Arrows | 1.5 px, orthogonal with 8 px rounded corners, small filled arrowhead |
+| Arrows (advanced view) | 1.5 px, orthogonal with 8 px rounded corners, small filled arrowhead |
 | Merged arrows | Width grows with the count, from 1.5 to 4 px |
+| Part (simple view) | 360 px wide, 18 px radius, a 2 px outline in its area's color. The ground with 16% of that color for a fill, 20% under the pointer |
+| Line (simple view) | 2 px, `#D4D8E8` (a little softer until it is pointed at), orthogonal with 12 px rounded corners |
+| Where a line starts | A ring, 3 px, in the color of the part it leaves, around a light dot. Centered on the card's edge |
+| Where a line ends | A light disc with a dark chevron that points into the card. Centered on the card's edge |
+| Label on a line (simple view) | A pill: `#F5F6FB` with `#2C3047` words, 14.5 / 20 semibold, fully round at one line |
 | Motion | 120 ms hover and selection, 250 ms expand and layout, 300 to 400 ms camera; ease-out |
 
-- **The color values are starting points** to tune in M0. Body text must keep at least 4.5:1 contrast against its surface.
-- **Color is used sparingly.** One accent color marks selection and interaction. Areas get a muted hue, assigned from a fixed palette by area ID, used only for the area tint. Accepted code has no state color at all: it is the resting state.
-- **State colors:** requested is amber, implemented candidate is blue, contradicted is red, unrequested is violet, unknown or opaque is gray hatching. Every state also has a badge with its name, so color is never the only signal.
-- **Arrow kinds** are shown by the label pill: `call` has no pill, `API · reserve` names the operation, and events, data access, and external dependencies each have a glyph.
-- **Selection** is a 2 px accent ring with a faint outer glow. Hover lightens the border.
-- **Themes.** Dark is the default and the one that gets design sign-off. A light theme is derived from the same tokens and is available through the toggle.
+- **Contrast.** Body text keeps at least 4.5:1 against what it is written on, in both themes. That includes the words on a part's tinted fill and on a pill, and a test measures it.
+- **Color carries belonging, not state.** An area's color outlines it, tints its blocks, outlines its part in the simple view, and rings the start of every line that part draws, so the eye can tell whose line it is. Colors are assigned from the fixed palette by area name, so an area keeps its color when others come and go. No area is amber or red, because those mean "asked for" and "contradicted". Accepted code has no state color at all: it is the resting state. One accent color marks selection and interaction.
+- **State colors:** requested is amber, implemented candidate is blue, contradicted is a soft red, unrequested is violet, unknown or opaque is gray hatching. Every state also has a badge with its name, so color is never the only signal.
+- **Arrow kinds** (advanced view) are shown by the label pill: `call` has no pill, `API · reserve` names the operation, and events, data access, and external dependencies each have a glyph.
+- **Selection.** A block takes a 2 px accent ring with a faint outer glow. A part's outline widens into a soft frame of its own color. A label on a line takes an accent ring. Hover lightens the border or the fill.
+- **The same mark means the same thing.** A chevron in a light disc means "into this": it ends a line, and it ends the "Open" button on a part. A ring means "from here": with a dot, a line that exists; with a plus, the place to pull a new one from.
+- **Themes.** Dark is the default and the one that gets design sign-off. A light theme is derived from the same tokens and is available through the toggle: a soft paper ground (`#EEF0F7`), white cards with the same tints, area colors at lightness 0.58, and the pills and marks reversed, dark with light words.
 - **Reduced motion** is honored: camera jumps cut instead of animating.
 
 ### 3.11 Layout
@@ -398,21 +416,24 @@ The upper deck has two views of the same map, and a switch between them. **Simpl
 The simple view is to the advanced view what describing a change to an agent in chat is to typing the code by hand. It is for someone who wants the shape of a program and how its pieces work together, and does not read code: a handful of large parts, a few plain sentences on each, and one labelled line between any two that talk.
 
 ```text
-┌──────────────────────────────────────────────────────────────────────┐
-│                                                          [ Simple ]  │  the switch
-│                    ┌──────────────────────────┐   ┌───────────────┐  │
-│                    │ Orders                   │   │ Payments      │  │
-│  ┌──────────────┐  │ Takes a customer from a  │──▶│ Takes money   │  │
-│  │ HTTP         │─▶│ full cart to a paid order│   │ and gives it  │  │
-│  │ The front    │  │ • Holds what a customer  │   │ back          │  │
-│  │ door …       │  │   wants to buy           │   └───────────────┘  │
-│  └──────────────┘  │ • Works out prices …     │   charges and refunds│
-│   places and       │ + Ask for something new  │        customers     │
-│   tracks orders    └──────────────────────────┘                      │
-│  ┌────────────────────────────────────────────────────────────────┐  │
-│  │ Shared   Small tools every part relies on     Used by every …  │  │  common ground
-│  └────────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│                                                               ( Simple )   │  the switch
+│                                  ╭──────────────────────────╮              │
+│  ╭──────────────╮                │ Orders                   │              │
+│  │ HTTP         │   ( places     │ Takes a customer from a  │  ( charges   │
+│  │ The front    ◉─── and tracks ─▸ full cart to a paid order ◉── and      ─▸  Payments
+│  │ door …       │     orders )   │ • Holds what a customer  │    refunds   │
+│  ╰──────────────╯                │   wants to buy           │   customers )│
+│                                  │ ⊕ Ask for something new  │              │
+│                                  ╰──────────────────────────╯              │
+│  ╭──────────────────────────────────────────────────────────────────────╮  │
+│  │ Shared   Small tools every part relies on         Used by every …    │  │  common ground
+│  ╰──────────────────────────────────────────────────────────────────────╯  │
+└────────────────────────────────────────────────────────────────────────────┘
+
+  ◉  where a line starts: a ring in the color of the part that asks
+  ▸  where it ends: a chevron pointing into the part that is asked
+ ( ) what is asked, on a pill
 ```
 
 **The switch.** One button at the top right of the canvas, 14 px in from both edges. It shows one word, "Simple" or "Advanced", for the view that is on screen, and pressing it (or `S`) goes to the other. The choice is remembered. Each view keeps its own camera: going back returns to where that view was left.
@@ -421,10 +442,11 @@ The simple view is to the advanced view what describing a change to an agent in 
 
 | On a part | What it is |
 |---|---|
-| Name | The area's name, in the area's color |
+| Outline and fill | The area's own color (§3.10): a 2 px outline, and a breath of it in the fill |
+| Name | The area's name |
 | Summary | One sentence: what the part is for |
 | Up to four lines | What it does, in plain words |
-| Lines with a square mark | What someone asked for on the map and accepted, in the words they used |
+| Lines with a ring for a mark | What someone asked for on the map and accepted, in the words they used |
 | Amber lines with a change bar | What has been asked for and is not built |
 | "Ask for something new" | One click, one sentence, Enter (below) |
 | Count of blocks, and a tests chip | How much is inside, and whether its tests pass |
@@ -434,6 +456,19 @@ The simple view is to the advanced view what describing a change to an agent in 
 - **Wiring is not conversation.** When one part only builds another's objects at start-up and asks nothing of it by name, no line is drawn. The part's panel says what it puts together.
 
 **Connections.** One line for each ordered pair of parts where the first calls the second, routed around the cards, with what the first asks of the second written on it in a few words: "gets catalog information", "charges and refunds customers". The label is always shown at reading size.
+
+A line says which way it goes at both ends, and what for in the middle:
+
+| On a line | What it says |
+|---|---|
+| A ring with a dot, on the edge of a card | The line starts here. The ring is the color of the part that asks |
+| A light disc with a chevron, on the edge of a card | The line ends here. The chevron points into the part that is asked |
+| A pill the line runs through | What is asked, in a few words |
+| Dashes, amber, and hollow marks | Asked for and not built |
+| Blue, red or violet, in a review | Built by the candidate, contradicted by it, or not asked for |
+
+- The marks sit half on the card and half off, above it, and no two touch: a line's end keeps 30 px from any other on the same side.
+- The `?` dialog opens with this legend.
 
 - **A picture, not a census.** When there are more connections than about one and a half per part (and more than ten), only the busiest are drawn. Every part keeps its busiest one, and the controls say "36 of 157 connections". Each part's panel lists all of its own.
 
@@ -453,15 +488,15 @@ With no summarizer configured, a part is only as plainly worded as its code's co
 | Gesture | Operation | Pending look |
 |---|---|---|
 | "Ask for something new" on a part (or `N`), a sentence, Enter | `add_behavior` on the area | An amber line on the part, and a flag: "1 request not sent" |
-| Drag from one part's edge to another, a sentence | `add_edge` between the two areas | A dashed amber line with those words on it |
+| Drag from the ring with a plus on a part's edge to another part, a sentence | `add_edge` between the two areas | A dashed amber line with those words on it, and hollow marks at its ends |
 
-- **Nothing else moves.** A part that gains a line grows by that line. A connection that is only asked for takes the plainest path between its two cards that crosses no other card, and no card moves for it. Only what is built decides the arrangement.
+- **Nothing else moves.** A part that gains a line grows by that line. A connection that is only asked for takes the plainest path between its two cards that crosses no other card and runs behind no label, its ends take free places on the cards, and no card moves for it. Only what is built decides the arrangement.
 - A request made of an area tells the agent the whole area and what was asked of it. The agent decides which blocks to change, and any change inside that area is explained by the request (§6.4).
 - The flag on a part follows the change: "1 request not sent", "Waiting for you", "Being built", "Ready to review", "Did not work". Clicking it opens the change, or its review.
 - **Review happens on the same picture.** Parts that changed stand out and the rest step back. A connection that was built turns solid. A part that holds a broken requirement says "Contradicted". Accept, Revise and Reject are the same as in §3.9.
 - **Accepted words stay.** A request that is accepted stays on its part as a line marked as a person's words, and an accepted connection keeps the words it was asked in as its label.
 
-**Going deeper.** Double-click a part, press "Open" on it, or press `Enter`: the advanced view, at that part's area. Search results and anything else the simple view does not draw (a block, an operation, a test) go to the advanced view too. Selecting a part opens a panel with the same things in plain words: what it is for, what it does, what it talks to, what is outside the repository, and the blocks inside it.
+**Going deeper.** Double-click a part, press "Open" on it, or press `Enter`: the advanced view, at that part's area. "Open" ends in the same chevron disc a line arrives in: both mean "into this part". Search results and anything else the simple view does not draw (a block, an operation, a test) go to the advanced view too. Selecting a part opens a panel with the same things in plain words: what it is for, what it does, what it talks to, what is outside the repository, and the blocks inside it.
 
 **Zoom.** The simple view pans and zooms like the full map and follows the 11 px rule in steps of 4%.
 

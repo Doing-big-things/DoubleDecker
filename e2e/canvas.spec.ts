@@ -430,12 +430,12 @@ test('dragging a block into another area regroups the picture, and nothing else'
 test('the light theme comes from the same tokens and is remembered', async ({ page }) => {
   const bg = () =>
     page.evaluate(() => getComputedStyle(document.querySelector('.react-flow')!).backgroundColor);
-  expect(await bg()).toBe('rgb(14, 15, 18)');
+  expect(await bg()).toBe('rgb(44, 48, 71)');
   await page.getByTestId('theme').click();
-  expect(await bg()).toBe('rgb(244, 245, 247)');
+  expect(await bg()).toBe('rgb(238, 240, 247)');
   await page.reload();
   await ready(page);
-  expect(await bg()).toBe('rgb(244, 245, 247)');
+  expect(await bg()).toBe('rgb(238, 240, 247)');
   // Body text keeps at least 4.5:1 contrast against its surface in both themes.
   const contrast = () =>
     page.evaluate(() => {

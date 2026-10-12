@@ -867,7 +867,12 @@ export const useDeck = create<DeckState>()((set, get) => {
             const now = get();
             if (now.selectedId !== id || now.view !== 'simple') return;
             if (!now.panelOpen) set({ panelOpen: true });
-            setTimeout(() => camera.reveal(id), 90);
+            // By the time the panel has opened, the selection or the view may have moved on.
+            // A reveal for what is no longer chosen would stop the camera on its way elsewhere.
+            setTimeout(() => {
+              const then = get();
+              if (then.selectedId === id && then.view === 'simple') camera.reveal(id);
+            }, 90);
           },
           opts.later && !s.panelOpen ? 260 : 0,
         );

@@ -4,7 +4,7 @@ A programming system with two connected decks, like a double-decker bus.
 
 - The **lower deck** is ordinary source code. AI agents do most of the work there.
 - The **upper deck** is a code-free map generated from that code. It has two views:
-  - **Simple**, which the app opens on: a few large parts, a few plain sentences on each, and a labelled line between any two that talk. It takes no knowledge of code to read, or to ask for something.
+  - **Simple**, which the app opens on: a few large parts, each in its own color, a few plain sentences on each, and a labelled line between any two that talk. A line leaves through a ring and arrives at a chevron, so it reads at a glance who asks whom, and for what. It takes no knowledge of code to read, or to ask for something.
   - **Advanced**, one step behind it: areas, blocks with a name and a few bullets, and arrows. You pan, zoom and drill into it, all the way down to the source a block represents.
 
 Ask for something on the map, in a sentence on a part or by editing a block, and it becomes a task for an agent. The agent's result comes back as a visual diff on the same map, with evidence, for you to accept, revise or reject.
@@ -86,7 +86,8 @@ In the simple view:
 | | |
 |---|---|
 | Ask for something | "Ask for something new" on a part, or `N` with a part selected |
-| Ask for a connection | Drag from one part's edge to another |
+| Read a line | It leaves the part that asks through a ring in that part's color, and arrives at a chevron on the part that is asked. Dashed and amber: asked for, not built. `?` shows the legend |
+| Ask for a connection | Drag from the ring with a plus on a part's edge to another part |
 | Open a part in the advanced view | Double-click it, its "Open" button, or `Enter` |
 | Say it better | Select a part or a line, and use the pencil in the panel |
 
@@ -128,7 +129,7 @@ npm run e2e
 
 | Suite | Covers |
 |---|---|
-| `e2e/simple.spec.ts` | The simple view: parts and labelled connections, the 11 px text floor at every zoom, the switch and each view's own place, opening a part, asking on a part and between two, the panel and rewriting by hand, hover and keyboard, frame rate, and a 300-block map |
+| `e2e/simple.spec.ts` | The simple view: parts and labelled connections, the marks at a line's two ends, each part's own color, text contrast in both themes, the 11 px text floor at every zoom, the switch and each view's own place, opening a part, asking on a part and between two, the panel and rewriting by hand, hover and keyboard, frame rate, and a 300-block map |
 | `e2e/simple-loop.spec.ts` | The simple view on real code: words derived from the code, a request typed on a part from plan to acceptance, a connection asked for with a flawed candidate caught and a revision accepted, and a summarizer writing the words |
 | `e2e/canvas.spec.ts` | The advanced view: zoom levels, the 11 px text floor, drilling in, tests chips, search, keyboard, outline, themes, every editing gesture with stored reference images, regrouping by drag, and the performance budgets on maps of 42, 300 and 1,500 blocks |
 | `e2e/compile-up.spec.ts` | The real map, source peek and open-in-editor, harness-run test status, identical snapshots, live updates, identity across renames, summaries |

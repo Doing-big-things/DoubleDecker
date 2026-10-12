@@ -32,7 +32,7 @@ const Areas = memo(function Areas({
           width={b.w}
           height={b.h}
           rx={2}
-          fill={`hsl(${areaStyle(index, b.id).hue} 40% 55% / ${b.depth ? 0.14 : 0.24})`}
+          fill={`oklch(0.72 0.09 ${areaStyle(index, b.id).hue} / ${b.depth ? 0.16 : 0.3})`}
         />
       ))}
     </>

@@ -2,64 +2,81 @@
 @import "@xyflow/react/dist/base.css";
 
 /* ---------- Tokens (spec §3.10). Dark is the designed theme; light derives from the same names. ---------- */
+/* A soft slate ground, never black, with light lines and one gentle color for each area. */
 :root,
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --canvas: #0e0f12;
-  --chrome: #121418;
-  --surface: #17191d;
-  --surface-2: #1d2025;
-  --surface-3: #262a31;
-  --line: #2a2d34;
-  --line-strong: #414652;
-  --text: #e8eaed;
-  --muted: #9aa0aa;
-  --faint: #6c727d;
-  --accent: #7c8cff;
-  --accent-soft: rgb(124 140 255 / 0.14);
-  --requested: #f2b84b;
-  --candidate: #5aa9ff;
-  --contradicted: #ff6b6b;
-  --unrequested: #b48cff;
-  --passing: #4cc38a;
-  --edge: #373c46;
-  --edge-lit: #aab1bd;
-  --grid: #24272e;
-  --hatch: rgb(154 160 170 / 0.22);
-  --area-fill: 0.06;
-  --area-line: 0.24;
-  --area-text-l: 78%;
-  --scrim: rgb(14 15 18 / 0.82);
-  --code-bg: #101216;
+  --canvas: #2c3047;
+  --chrome: #262a3e;
+  --surface: #353a54;
+  --surface-2: #3e4461;
+  --surface-3: #4a5171;
+  --line: #474e6b;
+  --line-strong: #646c90;
+  --text: #f3f4fa;
+  --muted: #bcc2d8;
+  --faint: #a3aac4;
+  --accent: #8fa6ff;
+  --accent-soft: rgb(143 166 255 / 0.2);
+  --requested: #f3c06c;
+  --candidate: #6fb8ff;
+  --contradicted: #ffa8a3;
+  --unrequested: #c8a8ff;
+  --passing: #66d3a4;
+  --edge: #5f6789;
+  --edge-lit: #dfe2ef;
+  --grid: #3a3f5a;
+  --hatch: rgb(188 194 216 / 0.2);
+  --area-fill: 0.07;
+  --area-line: 0.5;
+  --scrim: rgb(44 48 71 / 0.84);
+  --code-bg: #262a3e;
+  /* The simple view: its lines, and the pills its lines are labelled with. */
+  --wire: #d4d8e8;
+  --pill: #f5f6fb;
+  --pill-text: #2c3047;
+  --part-ground: var(--canvas);
+  /* An area's own color is one lightness and one strength at its hue (OKLCH), so no color shouts. */
+  --pc-l: 0.8;
+  --pc-c: 0.1;
+  --pt-l: 0.88;
+  --pt-c: 0.07;
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --canvas: #f4f5f7;
-  --chrome: #fbfbfc;
+  --canvas: #eef0f7;
+  --chrome: #f9fafd;
   --surface: #ffffff;
-  --surface-2: #f2f3f6;
-  --surface-3: #e7e9ee;
-  --line: #d9dce3;
-  --line-strong: #aeb4c0;
-  --text: #17191d;
-  --muted: #5a616d;
-  --faint: #8a909b;
-  --accent: #4856e0;
-  --accent-soft: rgb(72 86 224 / 0.1);
-  --requested: #a96a08;
-  --candidate: #1b6fd1;
-  --contradicted: #cf3f3f;
-  --unrequested: #7449cf;
-  --passing: #18875a;
-  --edge: #b9bec9;
-  --edge-lit: #414855;
-  --grid: #d5d8df;
-  --hatch: rgb(90 97 109 / 0.22);
-  --area-fill: 0.07;
-  --area-line: 0.34;
-  --area-text-l: 32%;
-  --scrim: rgb(244 245 247 / 0.86);
-  --code-bg: #f6f7f9;
+  --surface-2: #f2f4f9;
+  --surface-3: #e5e8f1;
+  --line: #d8dce8;
+  --line-strong: #a9b0c8;
+  --text: #262a41;
+  --muted: #515878;
+  --faint: #656d8e;
+  --accent: #4a5bd6;
+  --accent-soft: rgb(74 91 214 / 0.13);
+  --requested: #8a5503;
+  --candidate: #1a66bd;
+  --contradicted: #b83232;
+  --unrequested: #7046c8;
+  --passing: #10724b;
+  --edge: #b3b9cd;
+  --edge-lit: #454c68;
+  --grid: #d6dae6;
+  --hatch: rgb(81 88 120 / 0.22);
+  --area-fill: 0.1;
+  --area-line: 0.62;
+  --scrim: rgb(238 240 247 / 0.88);
+  --code-bg: #f5f6fa;
+  --wire: #515878;
+  --pill: #343a57;
+  --pill-text: #f5f6fb;
+  --part-ground: var(--surface);
+  --pc-l: 0.58;
+  --pc-c: 0.12;
+  --pt-l: 0.42;
+  --pt-c: 0.11;
 }
 
 @theme inline {
@@ -429,15 +446,15 @@ button {
   width: 100%;
   height: 100%;
   border-radius: 16px;
-  background: hsl(var(--h) 62% 62% / var(--area-fill));
-  border: 1px solid hsl(var(--h) 45% 62% / var(--area-line));
+  background: oklch(var(--pc-l) var(--pc-c) var(--h) / var(--area-fill));
+  border: 1.5px solid oklch(var(--pc-l) var(--pc-c) var(--h) / var(--area-line));
   transition:
     border-color 120ms,
     opacity 120ms,
     background 120ms;
 }
 .dd-area[data-depth="1"] {
-  background: hsl(var(--h) 62% 62% / calc(var(--area-fill) * 0.9));
+  background: oklch(var(--pc-l) var(--pc-c) var(--h) / calc(var(--area-fill) * 0.9));
 }
 .dd-area.is-selected {
   border-color: var(--accent);
@@ -447,7 +464,7 @@ button {
 .dd-area.is-drop {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
-  background: hsl(var(--h) 62% 62% / calc(var(--area-fill) * 2.2));
+  background: oklch(var(--pc-l) var(--pc-c) var(--h) / calc(var(--area-fill) * 2.2));
 }
 .dd-area-title {
   position: absolute;
@@ -462,7 +479,7 @@ button {
   line-height: 1.25;
   font-weight: 600;
   letter-spacing: -0.005em;
-  color: hsl(var(--h) 48% var(--area-text-l));
+  color: oklch(var(--pt-l) var(--pt-c) var(--h));
   white-space: nowrap;
   text-align: left;
   pointer-events: all;
@@ -495,7 +512,7 @@ button {
   display: grid;
   place-items: center;
   pointer-events: none;
-  color: hsl(var(--h) 44% var(--area-text-l));
+  color: oklch(var(--pt-l) var(--pt-c) var(--h));
   white-space: nowrap;
   overflow: hidden;
   line-height: 1.25;
@@ -531,7 +548,7 @@ button {
   overflow: visible;
 }
 .dd-chips path {
-  fill: hsl(var(--h) 30% 62% / 0.3);
+  fill: oklch(var(--pc-l) var(--pc-c) var(--h) / 0.34);
 }
 .dd-chips path.is-fail {
   fill: var(--contradicted);
@@ -586,9 +603,10 @@ button {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  border: 1px solid var(--line);
+  --pc: oklch(var(--pc-l) var(--pc-c) var(--h, 258));
+  border: 1px solid color-mix(in oklab, var(--pc) 34%, var(--line));
   border-radius: 10px;
-  background: var(--surface);
+  background: color-mix(in oklab, var(--pc) 8%, var(--surface));
   font-size: calc(12.5px * var(--ts));
   line-height: 1.44;
   transition:
@@ -608,7 +626,7 @@ button {
   border-radius: 9px;
 }
 .dd-block:hover {
-  border-color: var(--line-strong);
+  border-color: color-mix(in oklab, var(--pc) 70%, var(--line-strong));
 }
 .dd-block.is-selected {
   border-color: var(--accent);
@@ -1978,6 +1996,26 @@ textarea.dd-input {
   margin: 0 0 10px;
   font-size: 15px;
 }
+.dd-help-marks {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.dd-help-marks > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dd-end.dd-mark {
+  --h: 228;
+  position: static;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  transform: none;
+}
 .dd-help-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2023,11 +2061,11 @@ textarea.dd-input {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 34px;
-  min-width: 122px;
-  padding: 0 14px 0 12px;
+  height: 36px;
+  min-width: 124px;
+  padding: 0 16px 0 13px;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: 999px;
   background: var(--chrome);
   font-size: 13px;
   font-weight: 600;
@@ -2054,36 +2092,42 @@ textarea.dd-input {
   }
 }
 
+/* A part is outlined in its own color and filled with a breath of it. */
 .dd-part {
+  --pc: oklch(var(--pc-l) var(--pc-c) var(--h));
   position: relative;
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, hsl(var(--h) 45% 62%) 30%, var(--line));
-  border-radius: 14px;
-  background: color-mix(in srgb, hsl(var(--h) 62% 62%) 5%, var(--surface));
+  border: 2px solid var(--pc);
+  border-radius: 18px;
+  background: color-mix(in oklab, var(--pc) 16%, var(--part-ground));
   transition:
-    border-color 120ms,
-    box-shadow 120ms,
+    background 140ms,
+    border-color 140ms,
+    box-shadow 140ms,
     opacity 160ms;
 }
 .dd-part:hover {
-  border-color: color-mix(in srgb, hsl(var(--h) 45% 62%) 55%, var(--line-strong));
+  background: color-mix(in oklab, var(--pc) 20%, var(--part-ground));
 }
+/* Selected: the outline grows into a wide, soft frame of the same color. */
 .dd-part.is-selected {
-  border-color: var(--accent);
-  box-shadow:
-    0 0 0 1px var(--accent),
-    0 0 0 6px var(--accent-soft);
+  background: color-mix(in oklab, var(--pc) 20%, var(--part-ground));
+  box-shadow: 0 0 0 5px color-mix(in oklab, var(--pc) 42%, transparent);
 }
 /* Common ground: quieter than the parts that rest on it. */
 .dd-part.is-common {
-  background: color-mix(in srgb, var(--surface) 50%, var(--canvas));
+  border-color: color-mix(in oklab, var(--pc) 55%, var(--line));
+  background: color-mix(in oklab, var(--pc) 7%, var(--part-ground));
+}
+.dd-part.is-common:hover,
+.dd-part.is-common.is-selected {
+  background: color-mix(in oklab, var(--pc) 12%, var(--part-ground));
 }
 .dd-part.is-requested {
+  --pc: var(--requested);
   border-style: dashed;
-  border-color: var(--requested);
-  background: color-mix(in srgb, var(--requested) 5%, var(--surface));
 }
 .dd-part-body {
   display: flex;
@@ -2091,9 +2135,9 @@ textarea.dd-input {
   box-sizing: border-box;
   width: 100%;
   height: 100%;
-  padding: 14px 20px 10px;
+  padding: 16px 20px 12px;
   overflow: hidden;
-  border-radius: 13px;
+  border-radius: 16px;
   font-size: calc(14.5px * var(--ps, 1));
   line-height: calc(21px * var(--ps, 1));
 }
@@ -2108,32 +2152,42 @@ textarea.dd-input {
 .dd-part-name {
   font-size: calc(18px * var(--ps, 1));
   line-height: calc(26px * var(--ps, 1));
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: -0.014em;
-  color: hsl(var(--h) 52% var(--area-text-l));
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
 }
+/* "Open" ends in the same disc a line arrives in: both mean "into this part". */
 .dd-part-open {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   height: 24px;
-  padding: 0 4px 0 8px;
+  padding: 0 3px 0 10px;
   border: 0;
-  border-radius: 7px;
-  background: none;
-  color: var(--muted);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--pc) 22%, transparent);
+  color: var(--text);
   font-size: 14.5px;
-  font-weight: 500;
+  font-weight: 550;
   opacity: 0;
   transition:
     opacity 120ms,
-    background 120ms,
-    color 120ms;
+    background 120ms;
+}
+.dd-part-open svg {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  padding: 2px;
+  border-radius: 50%;
+  background: var(--pill);
+  color: var(--pill-text);
+  stroke-width: 2.6;
 }
 .dd-part:hover .dd-part-open,
 .dd-part.is-selected .dd-part-open,
@@ -2141,13 +2195,12 @@ textarea.dd-input {
   opacity: 1;
 }
 .dd-part-open:hover {
-  background: var(--surface-3);
-  color: var(--text);
+  background: color-mix(in oklab, var(--pc) 40%, transparent);
 }
 .dd-part-summary {
   flex: none;
   margin-top: calc(2px * var(--ps, 1));
-  color: var(--muted);
+  color: color-mix(in oklab, var(--text) 40%, var(--muted));
   display: -webkit-box;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -2166,11 +2219,11 @@ textarea.dd-input {
 }
 .dd-part-row > i {
   flex: none;
-  width: calc(5px * var(--ps, 1));
-  height: calc(5px * var(--ps, 1));
-  margin: calc(8px * var(--ps, 1)) calc(10px * var(--ps, 1)) 0 0;
+  width: calc(6px * var(--ps, 1));
+  height: calc(6px * var(--ps, 1));
+  margin: calc(7.5px * var(--ps, 1)) calc(9px * var(--ps, 1)) 0 0;
   border-radius: 50%;
-  background: hsl(var(--h) 40% 62% / 0.85);
+  background: var(--pc);
 }
 .dd-part-row > span {
   min-width: 0;
@@ -2179,22 +2232,35 @@ textarea.dd-input {
   overflow: hidden;
   overflow-wrap: anywhere;
 }
-/* Asked for on the map and built: a person's words, kept. */
+/* Asked for on the map and built: a person's words, kept. The dot becomes a ring. */
 .dd-part-row.is-asked > i {
-  border-radius: 1px;
-  background: var(--accent);
+  box-sizing: border-box;
+  border: calc(1.5px * var(--ps, 1)) solid var(--accent);
+  background: none;
 }
 .dd-part-row.is-requested {
+  position: relative;
   color: var(--requested);
-  box-shadow: -11px 0 0 -9px var(--requested);
+}
+/* The change bar: a request stands out down the card's left margin. */
+.dd-part-row.is-requested::before {
+  content: "";
+  position: absolute;
+  left: calc(-10px * var(--ps, 1));
+  top: calc(3px * var(--ps, 1));
+  bottom: calc(3px * var(--ps, 1));
+  width: 2.5px;
+  border-radius: 2px;
+  background: var(--requested);
 }
 .dd-part-row.is-requested > i {
+  border: 0;
   background: var(--requested);
 }
 .dd-part-more {
   height: calc(21px * var(--ps, 1));
   padding-left: calc(15px * var(--ps, 1));
-  color: var(--faint);
+  color: var(--muted);
 }
 .dd-part-foot {
   flex: none;
@@ -2204,61 +2270,73 @@ textarea.dd-input {
   height: 28px;
   margin-top: auto;
 }
+/* The invitation: a plus in a small disc of the part's color. */
 .dd-ask {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
   height: 28px;
-  margin-left: -8px;
-  padding: 0 12px 0 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  margin-left: -5px;
+  padding: 0 12px 0 4px;
+  border: 0;
+  border-radius: 999px;
   background: none;
   color: var(--muted);
-  font-weight: 450;
+  font-weight: 500;
   white-space: nowrap;
   transition:
     background 120ms,
-    color 120ms,
-    border-color 120ms;
-}
-.dd-part:hover .dd-ask {
-  background: var(--surface-2);
-  border-color: var(--line);
-}
-.dd-ask:hover {
-  color: var(--text);
-  border-color: var(--accent) !important;
+    color 120ms;
 }
 .dd-ask svg {
   flex: none;
-  color: var(--accent);
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  padding: 3px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--pc) 26%, transparent);
+  color: var(--pc);
+  stroke-width: 2.6;
+  transition:
+    background 120ms,
+    color 120ms;
 }
 /* On a crowded card the invitation gives way before the counts beside it do. */
-.dd-ask {
-  flex: 0 1 auto;
-  min-width: 0;
-}
 .dd-ask > span {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.dd-part:hover .dd-ask {
+  background: color-mix(in oklab, var(--pc) 16%, transparent);
+  color: var(--text);
+}
+.dd-part .dd-ask:hover {
+  background: color-mix(in oklab, var(--pc) 30%, transparent);
+  color: var(--text);
+}
+.dd-part:hover .dd-ask svg {
+  background: var(--pc);
+  color: var(--surface);
 }
 .dd-ask-input {
   flex: 1;
   min-width: 0;
   height: 28px;
   box-sizing: border-box;
-  padding: 0 10px;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
+  padding: 0 12px;
+  border: 1.5px solid var(--pc);
+  border-radius: 999px;
   background: var(--canvas);
   color: var(--text);
   font: inherit;
   outline: none;
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--pc) 28%, transparent);
 }
 .dd-ask-input::placeholder {
-  color: var(--faint);
+  color: var(--muted);
 }
 .dd-part-meta {
   display: inline-flex;
@@ -2266,7 +2344,7 @@ textarea.dd-input {
   gap: 4px;
   flex: none;
   margin-left: auto;
-  color: var(--faint);
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -2284,7 +2362,7 @@ textarea.dd-input {
 .dd-part-flag {
   position: absolute;
   left: 16px;
-  top: 0;
+  top: -1px;
   transform: translateY(-55%);
   display: flex;
   z-index: 2;
@@ -2292,12 +2370,14 @@ textarea.dd-input {
 .dd-part-flag .dd-badge {
   font-size: calc(14.5px * var(--ps, 1));
   line-height: 1.5;
+  padding: 0 0.7em;
   border: 0;
-  background: color-mix(in srgb, var(--c) 22%, var(--canvas));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 24%, var(--canvas));
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--c) 60%, transparent);
 }
 button.dd-part-work:hover {
-  box-shadow: 0 0 0 1px var(--c);
+  box-shadow: 0 0 0 1.5px var(--c);
 }
 .dd-part-work .dd-spin {
   width: 9px;
@@ -2313,7 +2393,7 @@ button.dd-part-work:hover {
   height: 100%;
   padding: 0 14px 0 20px;
   overflow: hidden;
-  border-radius: 13px;
+  border-radius: 16px;
   font-size: calc(14.5px * var(--ps, 1));
   line-height: calc(21px * var(--ps, 1));
 }
@@ -2330,7 +2410,7 @@ button.dd-part-work:hover {
 }
 .dd-part-bar-used {
   flex: none;
-  color: var(--faint);
+  color: var(--muted);
   white-space: nowrap;
 }
 .dd-part-bar .dd-ask {
@@ -2354,45 +2434,169 @@ button.dd-part-work:hover {
 }
 .dd-part-far b {
   max-width: 100%;
-  font-weight: 650;
+  font-weight: 700;
   line-height: 1.25;
   letter-spacing: -0.014em;
-  color: hsl(var(--h) 52% var(--area-text-l));
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Where a new connection is pulled from: an empty ring with a plus, on each side of a part. */
+.dd-part .dd-port {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid var(--pc);
+  background:
+    linear-gradient(var(--pc), var(--pc)) center / 8px 2px no-repeat,
+    linear-gradient(var(--pc), var(--pc)) center / 2px 8px no-repeat,
+    var(--canvas);
+}
+.dd-part .dd-port:hover {
+  background:
+    linear-gradient(var(--canvas), var(--canvas)) center / 8px 2px no-repeat,
+    linear-gradient(var(--canvas), var(--canvas)) center / 2px 8px no-repeat,
+    var(--pc);
+}
+.dd-part .dd-port.react-flow__handle-top {
+  top: -1px;
+}
+.dd-part .dd-port.react-flow__handle-bottom {
+  bottom: -1px;
+}
+.dd-part .dd-port.react-flow__handle-left {
+  left: -1px;
+}
+.dd-part .dd-port.react-flow__handle-right {
+  right: -1px;
+}
 .dd-part:hover .dd-port {
   opacity: 1;
 }
-
-/* Connections between parts: brighter than the advanced view's arrows, because here they are the picture. */
-.dd-plain path.dd-edge-line {
-  stroke: color-mix(in srgb, var(--edge-lit) 45%, var(--edge));
+.dd-flow[data-view="simple"] .react-flow__connection-path {
+  stroke-width: 2.4;
+  stroke-dasharray: 7 7;
   stroke-linecap: round;
 }
-.dd-plain path.dd-edge-head {
-  fill: color-mix(in srgb, var(--edge-lit) 45%, var(--edge));
+/* The ground of the simple view is plain: the parts and their lines are the whole picture. */
+.dd-flow[data-view="simple"] .react-flow__background {
+  opacity: 0;
 }
+
+/* Connections between parts: light lines, because here they are the picture. */
+.dd-plain path.dd-edge-line {
+  stroke: color-mix(in oklab, var(--wire) 82%, var(--canvas));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dd-plain.is-lit path.dd-edge-line {
+  stroke: var(--wire);
+}
+/* The two ends of a line. They sit on the edges of the cards, above them. */
+.dd-end {
+  --pc: oklch(var(--pc-l) var(--pc-c) var(--h));
+  --ec: var(--pill);
+  position: absolute;
+  transform: translate(-50%, -50%);
+  overflow: visible;
+  pointer-events: none;
+  transition: opacity 160ms;
+}
+/* It leaves through a ring in the color of the part that asks. */
+.dd-end-ring {
+  fill: var(--canvas);
+  stroke: var(--pc);
+  stroke-width: 3;
+}
+.dd-end-dot {
+  fill: var(--wire);
+}
+/* It arrives in a disc, and the chevron points into the part that is asked. */
+.dd-end-disc {
+  fill: var(--ec);
+  stroke: var(--canvas);
+  stroke-width: 1.5;
+}
+.dd-end-chev {
+  fill: none;
+  stroke: var(--pill-text);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dd-end.is-selected {
+  --pc: var(--accent);
+  --ec: var(--accent);
+}
+.dd-end.is-selected .dd-end-dot {
+  fill: var(--accent);
+}
+.dd-end[data-s="implemented"] {
+  --pc: var(--candidate);
+  --ec: var(--candidate);
+}
+.dd-end[data-s="contradicted"] {
+  --pc: var(--contradicted);
+  --ec: var(--contradicted);
+}
+.dd-end[data-s="unrequested"] {
+  --pc: var(--unrequested);
+  --ec: var(--unrequested);
+}
+.dd-end[data-s="implemented"] .dd-end-dot,
+.dd-end[data-s="contradicted"] .dd-end-dot,
+.dd-end[data-s="unrequested"] .dd-end-dot {
+  fill: var(--ec);
+}
+.dd-end[data-s="implemented"] .dd-end-chev,
+.dd-end[data-s="contradicted"] .dd-end-chev,
+.dd-end[data-s="unrequested"] .dd-end-chev,
+.dd-end.is-selected .dd-end-chev {
+  stroke: var(--canvas);
+}
+/* Asked for and not built: hollow, like every outline that is only a request. */
+.dd-end[data-s="requested"],
+.dd-end[data-s="missing"] {
+  --pc: var(--requested);
+}
+.dd-end[data-s="requested"] .dd-end-dot,
+.dd-end[data-s="missing"] .dd-end-dot {
+  fill: var(--requested);
+}
+.dd-end[data-s="requested"] .dd-end-disc,
+.dd-end[data-s="missing"] .dd-end-disc {
+  fill: var(--canvas);
+  stroke: var(--requested);
+  stroke-width: 2.2;
+  stroke-dasharray: 3.2 2.8;
+}
+.dd-end[data-s="requested"] .dd-end-chev,
+.dd-end[data-s="missing"] .dd-end-chev {
+  stroke: var(--requested);
+}
+.dd-end[data-s="removed"] {
+  opacity: 0.4;
+}
+/* What is asked, on a pill that the line runs through. */
 .dd-plain-label {
   position: absolute;
   transform: translate(-50%, -50%);
   box-sizing: border-box;
-  padding: 3px 10px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--canvas);
-  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+  padding: 5px 14px;
+  border: 0;
+  border-radius: 17px;
+  background: var(--pill);
+  color: var(--pill-text);
   font-size: 14.5px;
   line-height: 20px;
-  font-weight: 550;
+  font-weight: 600;
+  letter-spacing: -0.003em;
   text-align: center;
   pointer-events: all;
   cursor: default;
   transition:
     opacity 160ms,
-    border-color 120ms,
-    color 120ms;
+    box-shadow 120ms;
 }
 .dd-plain-label > span:first-child {
   display: -webkit-box;
@@ -2403,41 +2607,43 @@ button.dd-part-work:hover {
 }
 .dd-plain-label:hover,
 .dd-plain-label.is-lit {
-  color: var(--text);
-  border-color: var(--line-strong);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--pill) 30%, transparent);
 }
 .dd-plain-label.is-selected {
-  color: var(--text);
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow:
+    0 0 0 2.5px var(--canvas),
+    0 0 0 5px var(--accent);
 }
 .dd-plain-label[data-s="requested"],
 .dd-plain-label[data-s="missing"] {
-  border-style: dashed;
-  border-color: var(--requested);
+  padding: 3.5px 12.5px;
+  border: 1.5px dashed var(--requested);
+  background: color-mix(in oklab, var(--requested) 14%, var(--canvas));
   color: var(--requested);
 }
 .dd-plain-label[data-s="implemented"] {
-  border-color: var(--candidate);
+  box-shadow: 0 0 0 3px var(--candidate);
 }
 .dd-plain-label[data-s="contradicted"] {
-  border-color: var(--contradicted);
+  box-shadow: 0 0 0 3px var(--contradicted);
 }
 .dd-plain-label[data-s="unrequested"] {
-  border-color: var(--unrequested);
+  box-shadow: 0 0 0 3px var(--unrequested);
 }
 .dd-plain-flag {
   position: absolute;
   left: 50%;
   top: 0;
-  transform: translate(-50%, -78%);
+  transform: translate(-50%, -82%);
   white-space: nowrap;
 }
 .dd-plain-flag .dd-badge {
   font-size: 14.5px;
   line-height: 1.5;
-  background: color-mix(in srgb, var(--c) 22%, var(--canvas));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent);
+  padding: 0 0.7em;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 24%, var(--canvas));
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--c) 60%, transparent);
 }
 
 .dd-ask-box {

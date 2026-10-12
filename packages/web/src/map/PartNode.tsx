@@ -6,7 +6,7 @@ import { ChevronRight, Plus } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { fitPart } from '../model/simple';
 import { currentRun, type PartWork, useDeck } from '../state/store';
-import { areaStyle } from './AreaNode';
+import { areaStyle, LOOSE_HUE } from './AreaNode';
 import { Ports, StateBadge, TestsChip } from './BlockNode';
 import { ZOOM_STEPS } from './camera';
 
@@ -144,7 +144,7 @@ export const PartNode = memo(function PartNode({ id, width, height }: NodeProps)
   );
 
   if (!index || !part || !plan || !shown) return null;
-  const hue = part.node.kind === 'area' ? areaStyle(index, id).hue : 226;
+  const hue = part.node.kind === 'area' ? areaStyle(index, id).hue : LOOSE_HUE;
   const state = finding ?? (isRequest ? 'requested' : undefined);
   const w = width ?? 0;
   const h = height ?? plan.height;

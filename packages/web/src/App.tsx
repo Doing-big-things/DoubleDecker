@@ -44,6 +44,30 @@ function Help() {
     <>
       <div className="dd-overlay" onClick={() => useDeck.getState().set({ helpOpen: false })} />
       <div className="dd-help" role="dialog" aria-label="Keyboard shortcuts" data-testid="help">
+        <h3>Reading a line in the simple view</h3>
+        <div className="dd-help-marks" data-testid="help-marks">
+          <span>
+            <svg className="dd-end dd-mark" viewBox="-12 -12 24 24" aria-hidden="true">
+              <circle className="dd-end-ring" r="7.5" />
+              <circle className="dd-end-dot" r="3" />
+            </svg>
+            It leaves the part that asks, through a ring in that part's color.
+          </span>
+          <span>
+            <svg className="dd-end dd-mark" viewBox="-12 -12 24 24" aria-hidden="true">
+              <circle className="dd-end-disc" r="10.5" />
+              <path className="dd-end-chev" d="M-2.6,-5L2.6,0L-2.6,5" />
+            </svg>
+            It arrives at the part that is asked. The words on it say what for.
+          </span>
+          <span>
+            <svg className="dd-end dd-mark" data-s="requested" viewBox="-12 -12 24 24" aria-hidden="true">
+              <circle className="dd-end-disc" r="10.5" />
+              <path className="dd-end-chev" d="M-2.6,-5L2.6,0L-2.6,5" />
+            </svg>
+            Dashed and amber: asked for, and not built yet.
+          </span>
+        </div>
         <h3>Keyboard and mouse</h3>
         <div className="dd-help-grid">
           {SHORTCUTS.map(([what, keys]) => (

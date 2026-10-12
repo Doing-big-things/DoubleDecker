@@ -16,6 +16,7 @@ import { memo, useMemo } from 'react';
 import { reviewFlags } from '../lib/review';
 import { type DrawerRow, drawerRows, expandedPlan, fitBullets, opOffsets } from '../model/measure';
 import { currentRun, testsOpen, useDeck, useLevel, visualState } from '../state/store';
+import { areaStyle } from './AreaNode';
 import { BANDS, textScale } from './camera';
 
 const stop = (e: { stopPropagation(): void }) => e.stopPropagation();
@@ -358,6 +359,8 @@ export const BlockNode = memo(function BlockNode({ id, height }: NodeProps) {
     state === 'removed' ? 'is-removed' : '',
   ].join(' ');
   const aria = `${block.name}, block${state ? `, ${STATE_LABEL[state] ?? state}` : ''}, ${bullets.length} bullets`;
+  // A block wears a little of the color of the area it is in.
+  const tint = { '--h': areaStyle(index, block.parentId ?? '').hue } as React.CSSProperties;
 
   if (level !== 'blocks') {
     const fs = 11.5 / BANDS[band]!;
@@ -366,6 +369,7 @@ export const BlockNode = memo(function BlockNode({ id, height }: NodeProps) {
       <div
         role="group"
         className={`${cls} is-arch`}
+        style={tint}
         data-coverage={block.coverage}
         data-testid="block"
         data-id={id}
@@ -411,6 +415,7 @@ export const BlockNode = memo(function BlockNode({ id, height }: NodeProps) {
     <div
       role="group"
       className={cls}
+      style={tint}
       data-coverage={block.coverage}
       data-testid="block"
       data-id={id}

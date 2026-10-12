@@ -11,9 +11,11 @@ export const PART_W = 360;
 export const BAR_H = 56;
 /** Vertical measures of a part's card, in px at 100% zoom. The stylesheet uses the same numbers. */
 export const PART = {
+  /** The outline, in the part's own color. */
+  border: 2,
   padX: 20,
-  padTop: 14,
-  padBottom: 10,
+  padTop: 16,
+  padBottom: 12,
   title: 26,
   line: 21,
   gapSummary: 2,
@@ -27,6 +29,11 @@ const TEXT_PX = 14.5;
 const LABEL_PX = 14.5;
 const LABEL_LINE = 20;
 const LABEL_MAX_W = 176;
+/** A label is a pill: this much room around its words. */
+const LABEL_PAD_X = 14;
+const LABEL_PAD_Y = 5;
+/** How far a line's end keeps from a card's corner and from another line's end: each end carries a round mark. */
+const END_CLEAR = 30;
 const FONT = '"Inter Variable", Inter, system-ui, "Segoe UI", sans-serif';
 // Canvas text is measured without the page's alternate glyphs. A little room is held back,
 // so a line that is counted as fitting always does.
@@ -136,7 +143,7 @@ export function planPart(deck: SimpleDeck, part: SimplePart, marks: Marks): Part
       height: BAR_H,
     };
   }
-  const textW = PART_W - PART.padX * 2;
+  const textW = PART_W - (PART.padX + PART.border) * 2;
   const rowW = textW - PART.marker;
   const requested = part.asked.filter((l) => marks.get(l.id)?.state === 'requested');
   const accepted = part.asked.filter((l) => marks.get(l.id)?.state !== 'requested').slice(-MAX_ASKED);
@@ -158,7 +165,7 @@ export function planPart(deck: SimpleDeck, part: SimplePart, marks: Marks): Part
     part.described.length - described.length + (part.asked.length - requested.length - accepted.length);
   const summaryLines = part.summary ? countLines(part.summary.text, TEXT_PX, 400, textW, 3) : 0;
 
-  let h = PART.padTop + PART.title;
+  let h = PART.border * 2 + PART.padTop + PART.title;
   if (summaryLines) h += PART.gapSummary + summaryLines * PART.line;
   if (rows.length || more > 0) {
     h += PART.gapRows;
@@ -181,9 +188,12 @@ export function planPart(deck: SimpleDeck, part: SimplePart, marks: Marks): Part
 export function labelSize(text: string): LabelSize {
   const one = widthOf(text, LABEL_PX, 550) + SAFETY;
   const lines = one <= LABEL_MAX_W ? 1 : countLines(text, LABEL_PX, 550, LABEL_MAX_W, 3);
-  const w = Math.ceil((lines === 1 ? one : LABEL_MAX_W) + 22);
-  return { w, h: lines * LABEL_LINE + 8, lines };
+  const w = Math.ceil((lines === 1 ? one : LABEL_MAX_W) + LABEL_PAD_X * 2);
+  return { w, h: lines * LABEL_LINE + LABEL_PAD_Y * 2, lines };
 }
+
+type Point = [number, number];
+type Side = 'left' | 'right' | 'top' | 'bottom';
 
 export interface Rect {
   x: number;
@@ -225,6 +235,8 @@ export function layoutSignature(
 
 const GAP_X = 72;
 const GAP_Y = 64;
+/** Between two cards stacked in one column: room for a label asked for between them. */
+const STACK_GAP = 48;
 /** The screen shape an arrangement is chosen for. Fixed, so a map looks the same in any window. */
 const NOMINAL = { w: 1600, h: 900 };
 
@@ -272,11 +284,12 @@ async function flow(
       'elk.direction': direction,
       'elk.edgeRouting': 'ORTHOGONAL',
       'elk.padding': '[top=0,left=0,bottom=0,right=0]',
-      'elk.spacing.nodeNode': String(down ? GAP_X : 32),
+      'elk.spacing.nodeNode': String(down ? GAP_X : STACK_GAP),
       'elk.layered.spacing.nodeNodeBetweenLayers': String(down ? GAP_Y : 44),
       'elk.spacing.edgeNode': '32',
-      'elk.layered.spacing.edgeNodeBetweenLayers': '20',
+      'elk.layered.spacing.edgeNodeBetweenLayers': '26',
       'elk.spacing.edgeEdge': '24',
+      'elk.spacing.portPort': String(END_CLEAR),
       'elk.layered.spacing.edgeEdgeBetweenLayers': '20',
       'elk.spacing.edgeLabel': '6',
       'elk.spacing.componentComponent': String(GAP_X),
@@ -358,7 +371,7 @@ function shelf(
     .sort((a, b) => b.d - a.d || a.i - b.i)
     .map((x) => x.p);
 
-  const gapX = LABEL_MAX_W + 22 + 40;
+  const gapX = LABEL_MAX_W + LABEL_PAD_X * 2 + 52;
   const gapY = 104;
   const heightOf = (p: SimplePart) => plans.get(p.id)?.height ?? 200;
   let best: { cols: number; score: number } = { cols: 1, score: 0 };
@@ -383,13 +396,16 @@ function shelf(
     y += Math.max(...row.map(heightOf)) + gapY;
   }
   const height = y - gapY;
+  const ends: Point[] = [];
   for (const link of links) {
     const a = boxes.get(link.from);
     const b = boxes.get(link.to);
     if (!a || !b) continue;
     const others: Rect[] = [];
     for (const [id, box] of boxes) if (id !== link.from && id !== link.to) others.push(box);
-    routes.set(link.id, detour(a, b, others, labels.get(link.id)));
+    const route = detour(a, b, others, labels.get(link.id), ends, []);
+    routes.set(link.id, route);
+    ends.push(route.points[0]!, route.points.at(-1)!);
   }
   settleLabels(routes.values(), [...boxes.values()], []);
   for (const r of routes.values()) {
@@ -457,6 +473,11 @@ export function withRequests(
 ): SimpleLayout {
   const routes = new Map<string, SimpleRoute>();
   const added: SimpleRoute[] = [];
+  // What was there first does not move: a new line keeps its ends clear of the ends already
+  // on a card, and runs behind no label when another way is open.
+  const there = [...base.routes.values()].map((r) => r.label).filter((l): l is Rect => l !== null);
+  const ends: Point[] = [];
+  for (const r of base.routes.values()) ends.push(r.points[0]!, r.points.at(-1)!);
   for (const link of deck.links) {
     if (link.hidden) continue;
     const have = base.routes.get(link.id);
@@ -469,12 +490,12 @@ export function withRequests(
     if (!a || !b) continue;
     const others: Rect[] = [];
     for (const [id, box] of base.boxes) if (id !== link.from && id !== link.to) others.push(box);
-    const route = detour(a, b, others, labels.get(link.id));
+    const route = detour(a, b, others, labels.get(link.id), ends, there);
     routes.set(link.id, route);
     added.push(route);
+    ends.push(route.points[0]!, route.points.at(-1)!);
   }
-  // A new label keeps clear of the ones that were there first. Those do not move.
-  const there = [...base.routes.values()].map((r) => r.label).filter((l): l is Rect => l !== null);
+  // A new label keeps clear of the ones that were there first.
   settleLabels(added, [...base.boxes.values()], there);
   return { boxes: base.boxes, routes, bounds: boundsOf(base.boxes, routes) };
 }
@@ -505,8 +526,6 @@ function boundsOf(boxes: Map<Id, Rect>, routes: Map<string, SimpleRoute>): Rect 
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
-type Point = [number, number];
-
 function crosses(p: Point, q: Point, r: Rect, pad: number): boolean {
   return (
     Math.min(p[0], q[0]) < r.x + r.w + pad &&
@@ -516,18 +535,45 @@ function crosses(p: Point, q: Point, r: Rect, pad: number): boolean {
   );
 }
 
-/** A path from one card to another that stays clear of the others: straight across when it can, around the outside when it must. */
-function detour(a: Rect, b: Rect, others: Rect[], size: LabelSize | undefined): SimpleRoute {
-  const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), Math.max(lo, hi));
+/**
+ * A path from one card to another that stays clear of the others: straight across when it
+ * can, around the outside when it must. Each end carries a round mark, so an end takes a
+ * place on its side that no other line's end has taken.
+ */
+function detour(
+  a: Rect,
+  b: Rect,
+  others: Rect[],
+  size: LabelSize | undefined,
+  ends: Point[],
+  labels: Rect[],
+): SimpleRoute {
   const acx = a.x + a.w / 2;
   const acy = a.y + a.h / 2;
   const bcx = b.x + b.w / 2;
   const bcy = b.y + b.h / 2;
-  // Where a line leaves or enters a side: towards the other card, and never at a corner.
-  const ya = clamp(bcy, a.y + 20, a.y + a.h - 20);
-  const yb = clamp(acy, b.y + 20, b.y + b.h - 20);
-  const xa = clamp(bcx, a.x + 28, a.x + a.w - 28);
-  const xb = clamp(acx, b.x + 28, b.x + b.w - 28);
+  /** The free place nearest to `want` along one side of a card, never at a corner. */
+  const place = (r: Rect, side: Side, want: number): Point => {
+    const upright = side === 'left' || side === 'right';
+    const fixed = side === 'left' ? r.x : side === 'right' ? r.x + r.w : side === 'top' ? r.y : r.y + r.h;
+    const lo = (upright ? r.y : r.x) + END_CLEAR;
+    const hi = Math.max(lo, (upright ? r.y + r.h : r.x + r.w) - END_CLEAR);
+    const taken = ends
+      .filter((e) => Math.abs((upright ? e[0] : e[1]) - fixed) < 1)
+      .map((e) => (upright ? e[1] : e[0]))
+      .filter((v) => v > lo - END_CLEAR && v < hi + END_CLEAR);
+    const free = (v: number) => taken.every((t) => Math.abs(t - v) >= END_CLEAR - 0.5);
+    const first = Math.min(Math.max(want, lo), hi);
+    let v = first;
+    if (!free(first)) {
+      const spots = taken
+        .flatMap((t) => [t - END_CLEAR, t + END_CLEAR])
+        .filter((c) => c >= lo && c <= hi && free(c))
+        .sort((p, q) => Math.abs(p - first) - Math.abs(q - first));
+      v = spots[0] ?? first;
+    }
+    return upright ? [fixed, v] : [v, fixed];
+  };
   const right = b.x - (a.x + a.w);
   const left = a.x - (b.x + b.w);
   const below = b.y - (a.y + a.h);
@@ -543,92 +589,53 @@ function detour(a: Rect, b: Rect, others: Rect[], size: LabelSize | undefined): 
 
   const tries: { points: Point[]; side?: 'right' | 'left'; across?: boolean }[] = [];
   const z = (p: Point[]) => p.filter((pt, i) => i === 0 || pt[0] !== p[i - 1]![0] || pt[1] !== p[i - 1]![1]);
-  if (right >= 24) {
-    const mx = a.x + a.w + right / 2;
+  /** Out of one side, across the gap, into the facing side. */
+  const across = (from: Point, to: Point, mid: number, upright: boolean) =>
     tries.push({
-      points: z([
-        [a.x + a.w, ya],
-        [mx, ya],
-        [mx, yb],
-        [b.x, yb],
-      ]),
+      points: z(
+        upright ? [from, [mid, from[1]], [mid, to[1]], to] : [from, [from[0], mid], [to[0], mid], to],
+      ),
       across: true,
     });
-  }
-  if (left >= 24) {
-    const mx = b.x + b.w + left / 2;
-    tries.push({
-      points: z([
-        [a.x, ya],
-        [mx, ya],
-        [mx, yb],
-        [b.x + b.w, yb],
-      ]),
-      across: true,
-    });
-  }
+  if (right >= 24) across(place(a, 'right', bcy), place(b, 'left', acy), a.x + a.w + right / 2, true);
+  if (left >= 24) across(place(a, 'left', bcy), place(b, 'right', acy), b.x + b.w + left / 2, true);
+  // Between two cards stacked close, the label cannot sit clear of both. The line then runs
+  // near their right-hand ends, away from the flags that hang on a card's top left corner.
+  const tight = (gap: number) => size !== undefined && gap < size.h + 24;
+  const aside = Math.min(a.x + a.w, b.x + b.w) + 16 - (size?.w ?? 0) / 2;
   if (below >= 24) {
-    const my = a.y + a.h + below / 2;
-    tries.push({
-      points: z([
-        [xa, a.y + a.h],
-        [xa, my],
-        [xb, my],
-        [xb, b.y],
-      ]),
-      across: true,
-    });
+    const want = tight(below) ? [aside, aside] : [bcx, acx];
+    across(place(a, 'bottom', want[0]!), place(b, 'top', want[1]!), a.y + a.h + below / 2, false);
   }
   if (above >= 24) {
-    const my = b.y + b.h + above / 2;
-    tries.push({
-      points: z([
-        [xa, a.y],
-        [xa, my],
-        [xb, my],
-        [xb, b.y + b.h],
-      ]),
-      across: true,
-    });
+    const want = tight(above) ? [aside, aside] : [bcx, acx];
+    across(place(a, 'top', want[0]!), place(b, 'bottom', want[1]!), b.y + b.h + above / 2, false);
   }
-  tries.push({
-    points: [
-      [a.x + a.w, acy],
-      [farRight, acy],
-      [farRight, bcy],
-      [b.x + b.w, bcy],
-    ],
-    side: 'right',
-  });
-  tries.push({
-    points: [
-      [a.x, acy],
-      [farLeft, acy],
-      [farLeft, bcy],
-      [b.x, bcy],
-    ],
-    side: 'left',
-  });
-  tries.push({
-    points: [
-      [acx, a.y + a.h],
-      [acx, farBelow],
-      [bcx, farBelow],
-      [bcx, b.y + b.h],
-    ],
-  });
-  tries.push({
-    points: [
-      [acx, a.y],
-      [acx, farAbove],
-      [bcx, farAbove],
-      [bcx, b.y],
-    ],
-  });
+  /** Out of a side, around the outside, into the same side of the other card. */
+  const around = (side: Side, far: number) => {
+    const upright = side === 'left' || side === 'right';
+    const from = place(a, side, upright ? acy : acx);
+    const to = place(b, side, upright ? bcy : bcx);
+    tries.push({
+      points: upright ? [from, [far, from[1]], [far, to[1]], to] : [from, [from[0], far], [to[0], far], to],
+      ...(side === 'left' || side === 'right' ? { side } : {}),
+    });
+  };
+  around('right', farRight);
+  around('left', farLeft);
+  around('bottom', farBelow);
+  around('top', farAbove);
 
-  const clear = (points: Point[]) =>
-    points.every((p, i) => i === 0 || others.every((r) => !crosses(points[i - 1]!, p, r, 10)));
-  const pick = tries.find((t) => clear(t.points)) ?? tries[0]!;
+  const free = (points: Point[], behind: Rect[]) =>
+    points.every(
+      (p, i) =>
+        i === 0 ||
+        (others.every((r) => !crosses(points[i - 1]!, p, r, 10)) &&
+          behind.every((r) => !crosses(points[i - 1]!, p, r, 4))),
+    );
+  // Clear of every card and of every label. Failing that, clear of every card.
+  const pick =
+    tries.find((t) => free(t.points, labels)) ?? tries.find((t) => free(t.points, [])) ?? tries[0]!;
   if (!size) return { points: pick.points, label: null };
 
   // The label sits on the longest run. Beside it, on the far side, when the line goes around.
@@ -644,10 +651,12 @@ function detour(a: Rect, b: Rect, others: Rect[], size: LabelSize | undefined): 
       best = i;
     }
   }
-  // Straight across a gap, the label goes in the middle of the gap, whichever run that is.
-  if (pick.across) best = Math.ceil(pick.points.length / 2);
-  const p = pick.points[best - 1]!;
-  const q = pick.points[Math.min(best, pick.points.length - 1)]!;
+  // Across a gap, the label goes in the middle of the gap: on the run that crosses it, or
+  // halfway along a line that goes straight over.
+  const straight = pick.across === true && pick.points.length < 4;
+  if (pick.across) best = 2;
+  const p = straight ? pick.points[0]! : pick.points[best - 1]!;
+  const q = straight ? pick.points.at(-1)! : pick.points[Math.min(best, pick.points.length - 1)]!;
   const cx = (p[0] + q[0]) / 2;
   const cy = (p[1] + q[1]) / 2;
   const x = pick.side === 'right' ? cx + 8 : pick.side === 'left' ? cx - 8 - size.w : cx - size.w / 2;
@@ -661,15 +670,27 @@ function detour(a: Rect, b: Rect, others: Rect[], size: LabelSize | undefined): 
 const meet = (a: Rect, b: Rect, pad: number) =>
   a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad;
 
-/** Slide each label along its own run until it is clear of the cards and of the labels placed before it. */
+/**
+ * Slide each label along its own run until it is clear of the cards and of the labels placed
+ * before it. The labels with the least room to move are placed first, so the ones that can
+ * give way are the ones that do.
+ */
 function settleLabels(routes: Iterable<SimpleRoute>, cards: Rect[], taken: Rect[]): void {
-  for (const route of routes) {
+  const room = (route: SimpleRoute): number => {
+    if (!route.run || !route.label) return 0;
+    const [p, q] = route.run;
+    const along = p[1] === q[1] ? route.label.w : route.label.h;
+    return Math.max(0, Math.hypot(q[0] - p[0], q[1] - p[1]) - along);
+  };
+  const order = [...routes].map((route, i) => ({ route, i, room: room(route) }));
+  order.sort((a, b) => a.room - b.room || a.i - b.i);
+  for (const { route } of order) {
     const label = route.label;
     if (!label) continue;
     const run = route.run;
     if (run) {
       const [p, q] = run;
-      for (const t of [0.5, 0.32, 0.68, 0.16, 0.84]) {
+      for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.12, 0.88]) {
         const spot = {
           x: p[0] + (q[0] - p[0]) * t - label.w / 2,
           y: p[1] + (q[1] - p[1]) * t - label.h / 2,
@@ -699,9 +720,9 @@ export function fitPart(
   plan: PartPlan,
   scale: number,
 ): { summaryLines: number; rows: PartRow[]; more: number } {
-  const textW = PART_W - PART.padX * 2;
+  const textW = PART_W - (PART.padX + PART.border) * 2;
   const line = PART.line * scale;
-  let room = plan.height - PART.padTop - PART.padBottom - PART.title * scale;
+  let room = plan.height - PART.border * 2 - PART.padTop - PART.padBottom - PART.title * scale;
   let summaryLines = 0;
   if (part.summary) {
     const need = countLines(part.summary.text, TEXT_PX * scale, 400, textW, 6);

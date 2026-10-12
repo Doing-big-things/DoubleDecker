@@ -107,6 +107,134 @@ test('the app opens on a few large parts in plain words, with a labelled connect
   }
 });
 
+test('a line shows where it starts, where it goes and what for; each part has its own color; and all of it can be read', async ({
+  page,
+}) => {
+  const z = await zoom(page);
+  const mid = (b: { x: number; y: number; width: number; height: number }) => ({
+    x: b.x + b.width / 2,
+    y: b.y + b.height / 2,
+  });
+  type Box = { x: number; y: number; width: number; height: number };
+  /** On the outline of a card, and not at a corner. */
+  const onEdge = (p: { x: number; y: number }, r: Box) => {
+    const tol = 2.5;
+    const corner = 18 * z;
+    const upright =
+      (Math.abs(p.x - r.x) < tol || Math.abs(p.x - (r.x + r.width)) < tol) &&
+      p.y > r.y + corner &&
+      p.y < r.y + r.height - corner;
+    const level =
+      (Math.abs(p.y - r.y) < tol || Math.abs(p.y - (r.y + r.height)) < tol) &&
+      p.x > r.x + corner &&
+      p.x < r.x + r.width - corner;
+    return upright || level;
+  };
+  const byId = (id: string) => page.locator(`[data-testid="part"][data-id="${id}"]`);
+
+  // Every part is outlined in its own color, and no two are alike.
+  const outline = (el: Element) => getComputedStyle(el).borderTopColor;
+  const colors = await page
+    .getByTestId('part')
+    .evaluateAll((els) => els.map((el) => getComputedStyle(el).borderTopColor));
+  expect(new Set(colors).size).toBe(6);
+
+  // A line leaves through a ring on the edge of the part that asks, in that part's color. It
+  // arrives in a disc on the edge of the part that is asked, and the chevron points into it.
+  const marks: { x: number; y: number }[] = [];
+  const lines = await page.getByTestId('connection').all();
+  expect(lines).toHaveLength(6);
+  for (const line of lines) {
+    const id = (await line.getAttribute('data-id'))!;
+    const from = byId((await line.getAttribute('data-from'))!);
+    const to = byId((await line.getAttribute('data-to'))!);
+    const start = page.locator(`[data-testid="connection-from"][data-id="${id}"]`);
+    const end = page.locator(`[data-testid="connection-to"][data-id="${id}"]`);
+    await expect(start).toHaveCount(1);
+    await expect(end).toHaveCount(1);
+    const s = mid((await start.boundingBox())!);
+    const e = mid((await end.boundingBox())!);
+    expect(onEdge(s, (await from.boundingBox())!)).toBe(true);
+    const asked = (await to.boundingBox())!;
+    expect(onEdge(e, asked)).toBe(true);
+    expect(await start.locator('.dd-end-ring').evaluate((el) => getComputedStyle(el).stroke)).toBe(
+      await from.evaluate(outline),
+    );
+    const turn = /rotate\((-?[\d.]+)\)/.exec((await end.locator('.dd-end-chev').getAttribute('transform'))!)!;
+    const heading = (Number(turn[1]) * Math.PI) / 180;
+    const ahead = { x: e.x + Math.cos(heading) * 14, y: e.y + Math.sin(heading) * 14 };
+    expect(ahead.x).toBeGreaterThan(asked.x);
+    expect(ahead.x).toBeLessThan(asked.x + asked.width);
+    expect(ahead.y).toBeGreaterThan(asked.y);
+    expect(ahead.y).toBeLessThan(asked.y + asked.height);
+    marks.push(s, e);
+  }
+  // The marks are large enough to see, and no two touch.
+  const size = (await page.getByTestId('connection-to').first().boundingBox())!.width;
+  expect(size).toBeGreaterThanOrEqual(20);
+  for (let i = 0; i < marks.length; i++)
+    for (let j = i + 1; j < marks.length; j++)
+      expect(Math.hypot(marks[i]!.x - marks[j]!.x, marks[i]!.y - marks[j]!.y)).toBeGreaterThanOrEqual(size);
+
+  // What is asked is written on a pill: fully round at its ends, and the line runs through it.
+  const pill = label(page, 'gets catalog information');
+  const shape = await pill.evaluate((el) => ({
+    radius: Number.parseFloat(getComputedStyle(el).borderTopLeftRadius),
+    height: (el as HTMLElement).offsetHeight,
+  }));
+  expect(shape.radius * 2).toBeGreaterThanOrEqual(shape.height);
+
+  // The words on every card and every pill keep 4.5:1 against what they are written on,
+  // in both themes. The ground is a soft slate or a soft paper, never black or white.
+  const read = () =>
+    page.evaluate(() => {
+      const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!;
+      const rgb = (color: string) => {
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, 1, 1);
+        return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3);
+      };
+      const lum = (c: number[]) => {
+        const [r, g, b] = c.map((v) => {
+          const x = v / 255;
+          return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+      };
+      const ratio = (a: string, b: string) => {
+        const [x, y] = [lum(rgb(a)), lum(rgb(b))];
+        return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+      };
+      let worst = 21;
+      const words =
+        '.dd-part-name, .dd-part-summary, .dd-part-row > span, .dd-part-meta, .dd-ask, .dd-part-bar-sum, .dd-part-bar-used, .dd-part-tests .dd-chip';
+      for (const card of document.querySelectorAll('[data-testid="part"]')) {
+        const ground = getComputedStyle(card).backgroundColor;
+        for (const el of card.querySelectorAll(words))
+          worst = Math.min(worst, ratio(getComputedStyle(el).color, ground));
+      }
+      for (const el of document.querySelectorAll('[data-testid="connection-label"]')) {
+        const s = getComputedStyle(el);
+        worst = Math.min(worst, ratio(s.color, s.backgroundColor));
+      }
+      const ground = rgb(getComputedStyle(document.querySelector('.react-flow')!).backgroundColor);
+      return { worst, ground: lum(ground) };
+    });
+  await page.mouse.move(4, 4);
+  const dark = await read();
+  expect(dark.worst).toBeGreaterThan(4.5);
+  expect(dark.ground).toBeGreaterThan(0.02);
+  expect(dark.ground).toBeLessThan(0.08);
+  await page.getByTestId('theme').click();
+  // A card's fill takes a moment to change.
+  await page.waitForTimeout(400);
+  const light = await read();
+  expect(light.worst).toBeGreaterThan(4.5);
+  expect(light.ground).toBeGreaterThan(0.75);
+  expect(light.ground).toBeLessThan(0.95);
+});
+
 test('no text in the simple view is drawn smaller than 11 px, and cards give up lines before they give up legibility', async ({
   page,
 }) => {

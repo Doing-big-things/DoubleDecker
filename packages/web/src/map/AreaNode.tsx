@@ -8,8 +8,13 @@ import { BANDS, camera } from './camera';
 /** At System level blocks are not nodes: each area draws its blocks as plain chips. */
 export const ChipContext = createContext<Map<Id, { ok: string; fail: string }>>(new Map());
 
-// A fixed palette of muted hues, assigned by area id. Used only for the area tint.
-const HUES = [226, 268, 172, 36, 328, 200, 96, 14];
+// A fixed palette of hues, assigned by area name: blue, violet, teal, lime, pink, sky, green
+// and orchid. They are OKLCH hues, and the stylesheet gives every one the same lightness and
+// strength, so the areas differ in color and never in loudness. None is amber or red: on the
+// map those two mean "asked for" and "contradicted", and an area must not look like either.
+const HUES = [258, 302, 192, 128, 350, 226, 160, 324];
+/** The color of something that belongs to no area. */
+export const LOOSE_HUE = 258;
 const hueCache = new WeakMap<DeckIndex, Map<Id, { hue: number; depth: number }>>();
 
 export function areaStyle(index: DeckIndex, id: Id): { hue: number; depth: number } {
@@ -32,7 +37,7 @@ export function areaStyle(index: DeckIndex, id: Id): { hue: number; depth: numbe
       walk(area.id, HUES[slot]!, 0);
     }
   }
-  return map.get(id) ?? { hue: 226, depth: 0 };
+  return map.get(id) ?? { hue: LOOSE_HUE, depth: 0 };
 }
 
 export const AreaNode = memo(function AreaNode({ id, width, height }: NodeProps) {
