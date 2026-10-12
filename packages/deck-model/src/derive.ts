@@ -217,6 +217,13 @@ export function buildIndex(snapshot: DeckSnapshot): DeckIndex {
     edgeById.set(e.id, e);
     const toNode = byId.get(e.to);
     const fromBlock = blockOf.get(e.from);
+    if (toNode && toNode.kind !== 'external' && (!fromBlock || !blockOf.has(e.to))) {
+      // Asked for between two areas, before any code says which blocks it joins (spec §3.13).
+      const fa = topAreaOf(e.from);
+      const ta = topAreaOf(e.to);
+      if (fa && ta && fa !== ta && CANVAS_KINDS.has(e.kind)) addTo(areaMap, 'aln', fa, ta, e);
+      continue;
+    }
     if (!fromBlock || !toNode) continue;
     if (toNode.kind === 'external') {
       const list = externalsOf.get(fromBlock);

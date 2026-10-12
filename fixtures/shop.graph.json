@@ -24,7 +24,28 @@
     "kind": "area",
     "name": "HTTP",
     "parentId": "sys_c468dcae",
-    "bullets": [],
+    "summary": {
+     "id": "bul_fade6128",
+     "text": "The front door: takes requests from the website and the apps",
+     "origin": "summarized"
+    },
+    "bullets": [
+     {
+      "id": "bul_b17cf8fe",
+      "text": "Checks who is calling",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_b27cfa91",
+      "text": "Hands each request to the right part",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_af7cf5d8",
+      "text": "Turns problems into clear error messages",
+      "origin": "summarized"
+     }
+    ],
     "source": [],
     "coverage": "full"
    },
@@ -961,7 +982,33 @@
     "kind": "area",
     "name": "Orders",
     "parentId": "sys_c468dcae",
-    "bullets": [],
+    "summary": {
+     "id": "bul_97f79f57",
+     "text": "Takes a customer from a full cart to a paid order",
+     "origin": "summarized"
+    },
+    "bullets": [
+     {
+      "id": "bul_bc7a40d1",
+      "text": "Holds what a customer wants to buy",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_bb7a3f3e",
+      "text": "Works out prices and discounts",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_ba7a3dab",
+      "text": "Takes payment and confirms the order",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_b97a3c18",
+      "text": "Gets paid orders out of the door",
+      "origin": "summarized"
+     }
+    ],
     "source": [],
     "coverage": "full"
    },
@@ -2347,7 +2394,33 @@
     "kind": "area",
     "name": "Inventory",
     "parentId": "sys_c468dcae",
-    "bullets": [],
+    "summary": {
+     "id": "bul_9973fc69",
+     "text": "Keeps track of what is in stock",
+     "origin": "summarized"
+    },
+    "bullets": [
+     {
+      "id": "bul_17f1268b",
+      "text": "Knows how many of each product are left",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_16f124f8",
+      "text": "Holds stock for orders that have not shipped",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_19f129b1",
+      "text": "Records new deliveries",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_18f1281e",
+      "text": "Warns when stock runs low",
+      "origin": "summarized"
+     }
+    ],
     "source": [],
     "coverage": "full"
    },
@@ -3609,7 +3682,33 @@
     "kind": "area",
     "name": "Catalog",
     "parentId": "sys_c468dcae",
-    "bullets": [],
+    "summary": {
+     "id": "bul_7a6b0fdd",
+     "text": "What the shop sells",
+     "origin": "summarized"
+    },
+    "bullets": [
+     {
+      "id": "bul_a09d2767",
+      "text": "Lists products and their details",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_9f9d25d4",
+      "text": "Sorts products into categories",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_a29d2a8d",
+      "text": "Lets customers search",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_a19d28fa",
+      "text": "Keeps product photos",
+      "origin": "summarized"
+     }
+    ],
     "source": [],
     "coverage": "full"
    },
@@ -4521,7 +4620,33 @@
     "kind": "area",
     "name": "Payments",
     "parentId": "sys_c468dcae",
-    "bullets": [],
+    "summary": {
+     "id": "bul_c4ce6802",
+     "text": "Takes money and gives it back",
+     "origin": "summarized"
+    },
+    "bullets": [
+     {
+      "id": "bul_781dab78",
+      "text": "Charges customers",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_791dad0b",
+      "text": "Refunds them",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_7a1dae9e",
+      "text": "Keeps a record of every movement of money",
+      "origin": "summarized"
+     },
+     {
+      "id": "bul_7b1db031",
+      "text": "Hears back from the payment provider",
+      "origin": "summarized"
+     }
+    ],
     "source": [],
     "coverage": "full"
    },
@@ -5479,6 +5604,11 @@
     "kind": "area",
     "name": "Shared",
     "parentId": "sys_c468dcae",
+    "summary": {
+     "id": "bul_d1eaf52a",
+     "text": "Small tools every part relies on: money, time, IDs and logs",
+     "origin": "summarized"
+    },
     "bullets": [],
     "source": [],
     "coverage": "full"
@@ -12540,6 +12670,38 @@
     }
    }
   ],
+  "connections": {
+   "area_96cdc123>area_fa77d812": {
+    "id": "bul_7c385874",
+    "text": "places and tracks orders",
+    "origin": "summarized"
+   },
+   "area_96cdc123>area_a5a96f1e": {
+    "id": "bul_879a6f66",
+    "text": "gets catalog information",
+    "origin": "summarized"
+   },
+   "area_96cdc123>area_8e4ec96d": {
+    "id": "bul_3b0a26d6",
+    "text": "updates stock levels",
+    "origin": "summarized"
+   },
+   "area_fa77d812>area_a5a96f1e": {
+    "id": "bul_6481d189",
+    "text": "looks up products and prices",
+    "origin": "summarized"
+   },
+   "area_fa77d812>area_8e4ec96d": {
+    "id": "bul_c821f135",
+    "text": "holds stock for an order",
+    "origin": "summarized"
+   },
+   "area_fa77d812>area_2d36d5dc": {
+    "id": "bul_98f8258e",
+    "text": "charges and refunds customers",
+    "origin": "summarized"
+   }
+  },
   "stats": {
    "files": 80,
    "lines": 1755,

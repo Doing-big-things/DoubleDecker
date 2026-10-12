@@ -306,40 +306,16 @@ export function StateBadge({ state }: { state: string | undefined }) {
   );
 }
 
-function Ports() {
+export function Ports({ title = 'Drag to another block to request an arrow' }: { title?: string }) {
   return (
     <>
       <Handle type="source" id="cs" position={Position.Bottom} className="dd-anchor" isConnectable={false} />
       <Handle type="target" id="ct" position={Position.Top} className="dd-anchor" isConnectable={false} />
       <Handle type="target" id="in" position={Position.Top} className="dd-handle-in" />
-      <Handle
-        type="source"
-        id="pt"
-        position={Position.Top}
-        className="dd-port"
-        title="Drag to another block to request an arrow"
-      />
-      <Handle
-        type="source"
-        id="pb"
-        position={Position.Bottom}
-        className="dd-port"
-        title="Drag to another block to request an arrow"
-      />
-      <Handle
-        type="source"
-        id="pl"
-        position={Position.Left}
-        className="dd-port"
-        title="Drag to another block to request an arrow"
-      />
-      <Handle
-        type="source"
-        id="pr"
-        position={Position.Right}
-        className="dd-port"
-        title="Drag to another block to request an arrow"
-      />
+      <Handle type="source" id="pt" position={Position.Top} className="dd-port" title={title} />
+      <Handle type="source" id="pb" position={Position.Bottom} className="dd-port" title={title} />
+      <Handle type="source" id="pl" position={Position.Left} className="dd-port" title={title} />
+      <Handle type="source" id="pr" position={Position.Right} className="dd-port" title={title} />
     </>
   );
 }

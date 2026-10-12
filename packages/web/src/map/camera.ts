@@ -9,6 +9,9 @@ export type Level = 'system' | 'architecture' | 'blocks';
 export const BANDS = [0.05, 0.07, 0.1, 0.14, 0.2, 0.3, 0.36, 0.43, 0.51, 0.6, 0.67, 0.76, 0.88, 1] as const;
 const FIRST_ARCH = 5;
 const FIRST_BLOCKS = 9;
+/** The simple view follows zoom in steps of 4%, finer than the bands above. */
+export const ZOOM_STEPS = 25;
+export const zoomStepOf = (zoom: number): number => Math.floor(zoom * ZOOM_STEPS + 0.001);
 export const MIN_ZOOM = 0.05;
 export const MAX_ZOOM = 2.5;
 
@@ -58,6 +61,12 @@ let display: Display = new Map();
 // Blocks by grid cell, built when first asked for, so "is a card here?" does not scan the map.
 let cells: Map<string, Box[]> | null = null;
 const CELL = 512;
+// Room kept clear when fitting, for controls that sit over the canvas, and the most a fit may magnify.
+let frame: { top: number; right: number; bottom: number; left: number; maxZoom: number } | null = null;
+// Whether the view is still the one the last fit left: nothing has moved it since.
+let atFit = false;
+// What "everything" is when it is more than the boxes: the simple view's lines and labels.
+let whole: { x: number; y: number; width: number; height: number } | null = null;
 const past: Entry[] = [];
 const future: Entry[] = [];
 
@@ -78,6 +87,22 @@ export const camera = {
   setDisplay(d: Display): void {
     display = d;
     cells = null;
+  },
+  /** Fit to this instead of to the boxes alone, or pass null to go back to the boxes. */
+  setWhole(next: typeof whole): void {
+    whole = next;
+  },
+  /** Whether nothing has moved the camera since everything was last fitted. */
+  get atFit(): boolean {
+    return atFit;
+  },
+  /** The engineer panned or zoomed by hand. */
+  moved(): void {
+    atFit = false;
+  },
+  /** Keep margins clear when fitting everything, or pass null to fit edge to edge. */
+  setFrame(next: typeof frame): void {
+    frame = next;
   },
   /** Whether a rectangle, in flow coordinates, touches any block's card. */
   coversBlock(x0: number, y0: number, x1: number, y1: number): boolean {
@@ -140,11 +165,23 @@ export const camera = {
     future.length = 0;
   },
   fit(animate = true): void {
-    const bounds = boundsOf(display);
+    const bounds = whole ?? boundsOf(display);
     if (!rf || !bounds) return;
+    atFit = true;
+    const duration = animate && !reducedMotion() ? 350 : 0;
+    const w = (element?.clientWidth ?? 0) - (frame ? frame.left + frame.right : 0);
+    const h = (element?.clientHeight ?? 0) - (frame ? frame.top + frame.bottom : 0);
+    if (frame && w >= 120 && h >= 120) {
+      const vp = getViewportForBounds(bounds, w, h, MIN_ZOOM, frame.maxZoom, 0);
+      void rf.setViewport(
+        { x: vp.x + frame.left, y: vp.y + frame.top, zoom: vp.zoom },
+        { duration, ease: easeOut, interpolate: 'smooth' },
+      );
+      return;
+    }
     void rf.fitBounds(bounds, {
       padding: 0.06,
-      duration: animate && !reducedMotion() ? 350 : 0,
+      duration,
       ease: easeOut,
       interpolate: 'smooth',
     });
@@ -155,6 +192,7 @@ export const camera = {
     const list = Array.isArray(ids) ? ids : [ids];
     const bounds = boundsOf(display, list);
     if (!bounds) return;
+    atFit = false;
     const cx = bounds.x + bounds.width / 2;
     const cy = bounds.y + bounds.height / 2;
     const only = list.length === 1 ? display.get(list[0]!) : undefined;
@@ -196,6 +234,7 @@ export const camera = {
       box.ax + box.w <= v.x + v.w - margin &&
       box.ay + box.h <= v.y + v.h - margin;
     if (inside) return;
+    atFit = false;
     const cx = box.ax + box.w / 2;
     const cy = box.ay + box.h / 2;
     void rf.setCenter(cx, cy, {
@@ -206,17 +245,20 @@ export const camera = {
   },
   zoomBy(factor: number): void {
     if (!rf) return;
+    atFit = false;
     const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, rf.getViewport().zoom * factor));
     void rf.zoomTo(z, { duration: reducedMotion() ? 0 : 160 });
   },
   panBy(dx: number, dy: number): void {
     if (!rf) return;
+    atFit = false;
     const vp = rf.getViewport();
     void rf.setViewport({ ...vp, x: vp.x + dx, y: vp.y + dy }, { duration: reducedMotion() ? 0 : 120 });
   },
   back(current: Id | null): Entry | null {
     const entry = past.pop();
     if (!rf || !entry) return null;
+    atFit = false;
     future.push({ viewport: rf.getViewport(), selectedId: current });
     void rf.setViewport(entry.viewport, {
       duration: reducedMotion() ? 0 : 350,
@@ -228,6 +270,7 @@ export const camera = {
   forward(current: Id | null): Entry | null {
     const entry = future.pop();
     if (!rf || !entry) return null;
+    atFit = false;
     past.push({ viewport: rf.getViewport(), selectedId: current });
     void rf.setViewport(entry.viewport, {
       duration: reducedMotion() ? 0 : 350,

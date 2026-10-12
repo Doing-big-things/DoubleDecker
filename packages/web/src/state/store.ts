@@ -1,8 +1,10 @@
 import {
   type Bullet,
   buildIndex,
+  buildSimple,
   type Change,
   type ChangeOp,
+  connectionKey,
   type DeckBundle,
   type DeckIndex,
   type DeckSnapshot,
@@ -15,18 +17,41 @@ import {
   type ReviewBundle,
   requirementTests,
   type ServerEvent,
+  type SimpleDeck,
   type TestRun,
   withGroups,
   withNotes,
 } from '@decker/deck-model';
 import { create } from 'zustand';
 import { connect, type DeckSource, type Transition } from '../data/source';
-import { camera, type Level, levelOf } from '../map/camera';
+import { camera, type Level, levelOf, zoomStepOf } from '../map/camera';
 import { autoLayout, countMissing, makeRoom, type Positions, placeMissing, settle } from '../model/layout';
 import { collapsedHeight } from '../model/measure';
 import { applyOps, type Marks } from '../model/pending';
+import {
+  fontsChanged,
+  type LabelSize,
+  labelSize,
+  layoutSignature,
+  layoutSimple,
+  linkRequested,
+  type PartPlan,
+  planPart,
+  type SimpleLayout,
+  withRequests,
+} from '../model/simple';
 
 export type PanelTab = 'overview' | 'tests' | 'source' | 'diff';
+
+/** Simple shows a few large parts in plain words. Advanced is the full map (spec §3.13). */
+export type View = 'simple' | 'advanced';
+
+/** What is happening to a part: the most pressing state among the changes that touch it. */
+export interface PartWork {
+  kind: 'failed' | 'needs_you' | 'review' | 'building' | 'requested';
+  changeId: Id;
+  count: number;
+}
 
 export interface Peek {
   path: string;
@@ -102,8 +127,27 @@ export interface DeckState {
   laying: boolean;
   layoutEpoch: number;
 
+  view: View;
+  /** What to look at once the other view is on screen: set by drilling in. */
+  viewFocus: Id | Id[] | null;
+  simple: SimpleDeck | null;
+  simplePlans: Map<Id, PartPlan>;
+  simpleLabels: Map<string, LabelSize>;
+  /** Where everything that is built sits. Requests are drawn over it and move nothing. */
+  simpleBase: SimpleLayout | null;
+  simpleLayout: SimpleLayout | null;
+  simpleSig: string;
+  /** Review findings and pending requests, rolled up to parts and connections. */
+  simpleState: Map<Id, string>;
+  simpleChanged: Set<Id> | null;
+  simpleWork: Map<Id, PartWork>;
+  /** The part whose "ask for something new" box is open. */
+  asking: Id | null;
+
   theme: 'dark' | 'light';
   band: number;
+  /** Zoom in steps of 4%, for the simple view's cards. */
+  zoomStep: number;
   selectedId: Id | null;
   focusOpId: Id | null;
   lastFocus: Id | null;
@@ -137,7 +181,16 @@ export interface DeckState {
   init(): Promise<void>;
   setBand(band: number): void;
   setTheme(theme: 'dark' | 'light'): void;
-  select(id: Id | null, opts?: { fly?: boolean; op?: Id | null; keepTab?: boolean; silent?: boolean }): void;
+  /** Switch between the simple and the advanced view. `focus` is what to look at on arrival. */
+  setView(view: View, opts?: { focus?: Id | Id[] }): void;
+  /** Ask for a new connection between two parts, in plain words. */
+  askConnection(from: Id, to: Id, text: string): void;
+  /** Say what a part is for, or what a connection carries, in your own words. Empty restores the derived text. */
+  describePlain(target: { part: Id } | { from: Id; to: Id }, text: string): void;
+  select(
+    id: Id | null,
+    opts?: { fly?: boolean; op?: Id | null; keepTab?: boolean; silent?: boolean; later?: boolean },
+  ): void;
   hover(id: Id | null): void;
   toggleExpand(id?: Id): void;
   toggleInternals(id: Id): void;
@@ -178,6 +231,7 @@ export interface DeckState {
 
 let started = false;
 let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+let panelTimer: ReturnType<typeof setTimeout> | undefined;
 let toastId = 0;
 let summaryTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -196,6 +250,77 @@ const writeLocal = (key: string, value: unknown) => {
     // ignore
   }
 };
+
+function initialView(): View {
+  const asked = new URLSearchParams(location.search).get('view');
+  if (asked === 'simple' || asked === 'advanced') return asked;
+  return readLocal<string>('dd:view', 'simple') === 'advanced' ? 'advanced' : 'simple';
+}
+
+/** In the simple view, hovering a part lights the parts it talks to and the lines between them. */
+function litSimple(deck: SimpleDeck, id: Id): Set<Id> | null {
+  const link = deck.linkById.get(id);
+  if (link) return new Set([link.id, link.from, link.to]);
+  if (!deck.partById.has(id)) return null;
+  const out = new Set<Id>([id]);
+  for (const l of deck.links) {
+    if (l.wiring || (l.from !== id && l.to !== id)) continue;
+    // A connection to common ground is not drawn, and the two parts still belong together.
+    out.add(l.from).add(l.to);
+    if (!l.hidden) out.add(l.id);
+  }
+  return out;
+}
+
+const WORK_RANK: Record<PartWork['kind'], number> = {
+  failed: 0,
+  needs_you: 1,
+  review: 2,
+  building: 3,
+  requested: 4,
+};
+
+function workOf(change: Change): PartWork['kind'] | null {
+  switch (change.state) {
+    case 'draft':
+      return 'requested';
+    case 'planning':
+    case 'implementing':
+    case 'checking':
+      return 'building';
+    case 'needs_answer':
+    case 'plan_ready':
+      return 'needs_you';
+    case 'in_review':
+      return 'review';
+    case 'failed':
+      return 'failed';
+    default:
+      return null;
+  }
+}
+
+/** The parts an operation is about. */
+function partsOfOp(deck: SimpleDeck, index: DeckIndex, op: ChangeOp): Id[] {
+  const home = (id: Id | undefined): Id | undefined => {
+    if (!id) return undefined;
+    const direct = deck.partOf.get(id);
+    if (direct) return direct;
+    const edge = index.edgeById.get(id);
+    if (edge) return deck.partOf.get(edge.from);
+    const link = index.linkById.get(id);
+    return link ? deck.partOf.get(link.from) : undefined;
+  };
+  const ids =
+    op.type === 'add_edge'
+      ? [home(op.from), home(op.to)]
+      : op.type === 'add_block'
+        ? [home(op.id) ?? home(op.parentId)]
+        : op.type === 'remove'
+          ? [home(op.targetId) ?? home(op.ownerId)]
+          : [home(op.targetId)];
+  return ids.filter((x): x is Id => Boolean(x));
+}
 
 function litFor(index: DeckIndex, id: Id): Set<Id> | null {
   const link = index.linkById.get(id) ?? index.areaLinks.find((l) => l.id === id);
@@ -354,17 +479,86 @@ export const useDeck = create<DeckState>()((set, get) => {
     }
     const applied = applyOps(withNotes(base, s.bundle.notes), ops);
     const index = buildIndex(withGroups(applied.snapshot, s.groups));
+
+    // The simple view is the same deck seen from further away, so it is rebuilt with it.
+    const simple = buildSimple(index, s.bundle.notes);
+    const simplePlans = new Map(simple.parts.map((p) => [p.id, planPart(simple, p, applied.marks)]));
+    const simpleLabels = new Map(
+      simple.links.filter((l) => !l.hidden).map((l) => [l.id, labelSize(l.label.text)]),
+    );
+    const simpleState = new Map<Id, string>();
+    const rank = (kind: string) => FINDING_RANK[kind as FindingKind] ?? 9;
+    const roll = (id: Id | undefined, kind: string) => {
+      if (!id) return;
+      const cur = simpleState.get(id);
+      if (!cur || rank(kind) < rank(cur)) simpleState.set(id, kind);
+    };
+    for (const [id, kind] of findings) {
+      if (kind === 'supported' || kind === 'untested') continue;
+      roll(simple.partOf.get(id), kind);
+      roll(simple.linkOf.get(id), kind);
+    }
+    if (s.review && !s.showBefore)
+      for (const op of ops) for (const p of partsOfOp(simple, index, op)) roll(p, 'missing');
+    let simpleChanged: Set<Id> | null = null;
+    if (changedIds) {
+      simpleChanged = new Set();
+      for (const id of changedIds) {
+        const part = simple.partOf.get(id);
+        if (part) simpleChanged.add(part);
+        const link = simple.linkOf.get(id);
+        if (link) simpleChanged.add(link).add(simple.linkById.get(link)!.from);
+      }
+      for (const id of simpleState.keys()) simpleChanged.add(id);
+    }
+    const simpleWork = new Map<Id, PartWork>();
+    for (const c of s.changes) {
+      const kind = workOf(c);
+      if (!kind) continue;
+      for (const op of c.operations) {
+        for (const part of partsOfOp(simple, index, op)) {
+          const cur = simpleWork.get(part);
+          if (cur && cur.changeId === c.id) cur.count += 1;
+          else if (!cur || WORK_RANK[kind] < WORK_RANK[cur.kind])
+            simpleWork.set(part, { kind, changeId: c.id, count: 1 });
+        }
+      }
+    }
+    const asked = new Set(
+      simple.links.filter((l) => !l.hidden && linkRequested(l, applied.marks) === 'all').map((l) => l.id),
+    );
+    const simpleSig = layoutSignature(simple, simplePlans, simpleLabels, asked);
+
     const exists = (id: Id | null) =>
       id !== null &&
-      (index.byId.has(id) || index.linkById.has(id) || index.areaLinks.some((l) => l.id === id));
+      (index.byId.has(id) ||
+        index.linkById.has(id) ||
+        simple.linkById.has(id) ||
+        index.areaLinks.some((l) => l.id === id));
     set({
       index,
       marks: applied.marks,
       findings,
       changedIds,
+      simple,
+      simplePlans,
+      simpleLabels,
+      simpleState,
+      simpleChanged,
+      simpleWork,
+      simpleSig,
+      simpleLayout: s.simpleBase ? withRequests(s.simpleBase, simple, simpleLabels) : null,
       selectedId: exists(s.selectedId) ? s.selectedId : null,
       focusOpId: s.focusOpId && index.byId.has(s.focusOpId) ? s.focusOpId : null,
     });
+    if (simpleSig !== s.simpleSig)
+      layoutSimple(simple, simplePlans, simpleLabels, asked)
+        .then((simpleBase) => {
+          const now = get();
+          if (now.simpleSig !== simpleSig || !now.simple) return;
+          set({ simpleBase, simpleLayout: withRequests(simpleBase, now.simple, now.simpleLabels) });
+        })
+        .catch((err: unknown) => get().toast(`Layout failed: ${String(err)}`, true));
     ensureLayout();
   };
 
@@ -434,6 +628,14 @@ export const useDeck = create<DeckState>()((set, get) => {
             : n,
         );
         set({ bundle: { ...s.bundle, snapshot: { ...s.bundle.snapshot, nodes } } });
+        clearTimeout(summaryTimer);
+        summaryTimer = setTimeout(rebuild, 150);
+        break;
+      }
+      case 'connections': {
+        const s = get();
+        if (!s.bundle) break;
+        set({ bundle: { ...s.bundle, snapshot: { ...s.bundle.snapshot, connections: event.connections } } });
         clearTimeout(summaryTimer);
         summaryTimer = setTimeout(rebuild, 150);
         break;
@@ -520,8 +722,22 @@ export const useDeck = create<DeckState>()((set, get) => {
     laying: false,
     layoutEpoch: 0,
 
+    view: initialView(),
+    viewFocus: null,
+    simple: null,
+    simplePlans: new Map(),
+    simpleLabels: new Map(),
+    simpleBase: null,
+    simpleLayout: null,
+    simpleSig: '',
+    simpleState: new Map(),
+    simpleChanged: null,
+    simpleWork: new Map(),
+    asking: null,
+
     theme: document.documentElement.dataset.theme === 'light' ? 'light' : 'dark',
     band: 12,
+    zoomStep: 25,
     selectedId: null,
     focusOpId: null,
     lastFocus: null,
@@ -558,9 +774,28 @@ export const useDeck = create<DeckState>()((set, get) => {
       try {
         const source = await connect();
         set({ source });
+        // Listen before loading. What the server pushes while the map is being fetched is
+        // kept and applied once the map is there, so nothing is lost in between.
+        const early: ServerEvent[] = [];
+        let loaded = false;
+        source.subscribe((event) => {
+          if (loaded) onEvent(event);
+          else early.push(event);
+        });
+        await source.listening();
         const bundle = await source.load();
+        // A part's size comes from measuring its text, so the text face has to be there first.
+        await Promise.race([
+          Promise.all([
+            document.fonts.load('400 14.5px "Inter Variable"'),
+            document.fonts.load('650 18px "Inter Variable"'),
+          ]),
+          new Promise((resolve) => setTimeout(resolve, 800)),
+        ]).catch(() => {});
+        fontsChanged();
         applyBundle(bundle, true);
-        source.subscribe(onEvent);
+        loaded = true;
+        for (const event of early) onEvent(event);
         const fromHash = idFromHash(location.hash);
         if (fromHash) setTimeout(() => get().select(fromHash, { fly: true, silent: true }), 600);
       } catch (err) {
@@ -594,7 +829,22 @@ export const useDeck = create<DeckState>()((set, get) => {
         }
       }
       const changed = id !== s.selectedId;
-      if (opts.fly && id) {
+      // A selection belongs to one view. Choosing something only the other view shows goes
+      // there: a block from the simple view, a plain connection from the advanced one.
+      const inSimple = Boolean(id && s.simple && (s.simple.partById.has(id) || s.simple.linkById.has(id)));
+      const crosses = id !== null && (s.view === 'simple' ? !inSimple : Boolean(s.simple?.linkById.has(id)));
+      if (crosses) {
+        const view: View = s.view === 'simple' ? 'advanced' : 'simple';
+        writeLocal('dd:view', view);
+        set({
+          view,
+          viewFocus: opts.fly ? id : null,
+          hoverId: null,
+          lit: null,
+          asking: null,
+          zoomStep: zoomStepOf(camera.viewport().zoom),
+        });
+      } else if (opts.fly && id) {
         camera.record(s.selectedId);
         camera.flyTo(id);
       }
@@ -602,11 +852,26 @@ export const useDeck = create<DeckState>()((set, get) => {
         selectedId: id,
         focusOpId: opts.op ?? null,
         lastFocus: id ?? s.lastFocus,
-        panelOpen: id ? true : s.review ? s.panelOpen : false,
+        panelOpen: id ? (opts.later ? s.panelOpen : true) : s.review ? s.panelOpen : false,
         panelTab: changed && !opts.keepTab ? 'overview' : s.panelTab,
         peek: changed ? null : s.peek,
         editing: null,
       });
+      // Opening the panel narrows the canvas. A part chosen near its right edge is kept in
+      // sight. A click on the canvas opens the panel a moment later: otherwise the panel
+      // would slide under the second click of a double-click, which is how a part is opened.
+      if (id && !crosses && !opts.fly && s.view === 'simple' && s.simple?.partById.has(id)) {
+        clearTimeout(panelTimer);
+        panelTimer = setTimeout(
+          () => {
+            const now = get();
+            if (now.selectedId !== id || now.view !== 'simple') return;
+            if (!now.panelOpen) set({ panelOpen: true });
+            setTimeout(() => camera.reveal(id), 90);
+          },
+          opts.later && !s.panelOpen ? 260 : 0,
+        );
+      }
       if (changed && !opts.silent) {
         const hash = hashFor(index, id);
         if (location.hash !== hash)
@@ -622,8 +887,9 @@ export const useDeck = create<DeckState>()((set, get) => {
       }
       if (id === get().hoverId) return;
       hoverTimer = setTimeout(() => {
-        const index = get().index;
-        if (index) set({ hoverId: id, lit: litFor(index, id) });
+        const { index, view, simple } = get();
+        if (view === 'simple' && simple) set({ hoverId: id, lit: litSimple(simple, id) });
+        else if (index) set({ hoverId: id, lit: litFor(index, id) });
       }, 150);
     },
 
@@ -670,6 +936,7 @@ export const useDeck = create<DeckState>()((set, get) => {
       if (s.popover) return set({ popover: null });
       if (s.paletteOpen || s.helpOpen) return set({ paletteOpen: false, helpOpen: false });
       if (s.editing) return set({ editing: null });
+      if (s.asking) return set({ asking: null });
       if (s.trayOpen) return set({ trayOpen: false });
       if (s.outlineOpen) return set({ outlineOpen: false });
       const sel = s.selectedId;
@@ -682,6 +949,11 @@ export const useDeck = create<DeckState>()((set, get) => {
         return set({ expanded, testsToggled });
       }
       if (sel) return get().select(null);
+      if (s.view === 'simple') {
+        camera.record(null);
+        camera.fit();
+        return set({ lastFocus: null });
+      }
       const index = s.index;
       const last = s.lastFocus ? index?.byId.get(s.lastFocus) : undefined;
       const parent = last?.parentId ? index?.byId.get(last.parentId) : undefined;
@@ -693,6 +965,70 @@ export const useDeck = create<DeckState>()((set, get) => {
         camera.fit();
         set({ lastFocus: null });
       }
+    },
+
+    setView(view, opts = {}) {
+      const s = get();
+      if (view === s.view) {
+        if (opts.focus) camera.flyTo(opts.focus);
+        return;
+      }
+      writeLocal('dd:view', view);
+      // Opening one thing selects it. Otherwise the selection follows where it can: a block's
+      // part in the simple view, nothing for a connection that only one view draws.
+      const sel = typeof opts.focus === 'string' ? opts.focus : s.selectedId;
+      const selectedId = !sel
+        ? null
+        : view === 'simple'
+          ? (s.simple?.partOf.get(sel) ?? null)
+          : s.index?.byId.has(sel)
+            ? sel
+            : null;
+      clearTimeout(hoverTimer);
+      set({
+        view,
+        viewFocus: opts.focus ?? null,
+        zoomStep: zoomStepOf(camera.viewport().zoom),
+        selectedId,
+        focusOpId: null,
+        panelOpen: selectedId ? s.panelOpen : Boolean(s.review) && s.panelOpen,
+        peek: null,
+        hoverId: null,
+        lit: null,
+        asking: null,
+        popover: null,
+        editing: null,
+      });
+    },
+
+    askConnection(from, to, text) {
+      const label = text.trim().replace(/\s+/g, ' ').slice(0, 120);
+      if (!label || from === to) return;
+      mutate((ops) => [
+        ...ops,
+        { id: freshId('op'), type: 'add_edge', from, to, kind: 'call', label, bullets: [] },
+      ]);
+    },
+
+    describePlain(target, text) {
+      const s = get();
+      if (!s.bundle) return;
+      const clean = text.trim().replace(/\s+/g, ' ');
+      const plain = s.bundle.notes.plain ?? {};
+      const summaries = { ...(plain.summaries ?? {}) };
+      const connections = { ...(plain.connections ?? {}) };
+      if ('part' in target) {
+        if (clean) summaries[target.part] = clean.slice(0, 400);
+        else delete summaries[target.part];
+      } else {
+        const key = connectionKey(target.from, target.to);
+        if (clean) connections[key] = clean.slice(0, 200);
+        else delete connections[key];
+      }
+      const notes = { ...s.bundle.notes, plain: { summaries, connections } };
+      set({ bundle: { ...s.bundle, notes } });
+      s.source?.saveNotes(notes);
+      rebuild();
     },
 
     back() {
@@ -1063,7 +1399,11 @@ export const useDeck = create<DeckState>()((set, get) => {
               .filter((b): b is Id => Boolean(b)),
           ),
         ];
-        if (blocks.length) setTimeout(() => camera.flyTo(blocks), 320);
+        const simple = get().view === 'simple' ? get().simple : null;
+        const targets = simple
+          ? [...new Set(blocks.map((b) => simple.partOf.get(b)).filter((p): p is Id => Boolean(p)))]
+          : blocks;
+        if (targets.length) setTimeout(() => camera.flyTo(targets), 320);
       } catch (err) {
         get().toast(err instanceof Error ? err.message : String(err), true);
       }
@@ -1113,7 +1453,8 @@ export function crumbsFor(s: Pick<DeckState, 'index' | 'selectedId'>) {
   if (!index) return [];
   if (!s.selectedId) return [index.system];
   const link = index.linkById.get(s.selectedId);
-  return pathTo(index, link ? link.from : s.selectedId);
+  const path = pathTo(index, link ? link.from : s.selectedId);
+  return path.length ? path : [index.system];
 }
 
 export function visualState(s: Pick<DeckState, 'marks' | 'findings'>, id: Id): string | undefined {

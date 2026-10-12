@@ -18,21 +18,62 @@ import {
   useReactFlow,
   ViewportPortal,
 } from '@xyflow/react';
-import { Maximize2, Minus, Plus } from 'lucide-react';
+import { Maximize2, Minus, Network, Plus, Shapes } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AREA, areaAt, type Box, computeDisplay, type Display } from '../model/layout';
 import { BLOCK_W, blockHeight, collapsedHeight } from '../model/measure';
-import { currentRun, useDeck, useLevel } from '../state/store';
+import { currentRun, useDeck, useLevel, type View } from '../state/store';
 import { AreaNode, AreaTitles, ChipContext } from './AreaNode';
 import { BlockNode } from './BlockNode';
-import { BANDS, bandFor, bandVars, camera, levelOf, MAX_ZOOM, MIN_ZOOM } from './camera';
+import {
+  BANDS,
+  bandFor,
+  bandVars,
+  camera,
+  levelOf,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  ZOOM_STEPS,
+  zoomStepOf,
+} from './camera';
 import { type Side, sideOf, slot } from './geometry';
 import { LabelLayer, LinkEdge } from './LinkEdge';
 import { MiniMap } from './MiniMap';
+import { PartNode, partLod } from './PartNode';
+import { PlainEdge } from './PlainEdge';
 
-const nodeTypes = { area: AreaNode, block: BlockNode };
-const edgeTypes = { link: LinkEdge };
+const nodeTypes = { area: AreaNode, block: BlockNode, part: PartNode };
+const edgeTypes = { link: LinkEdge, plain: PlainEdge };
 const LEVEL_NAME = { system: 'System', architecture: 'Architecture', blocks: 'Blocks' } as const;
+const NO_DISPLAY: Display = new Map();
+
+/**
+ * The switch between the two views (spec §3.13). It shows the view that is on screen, and
+ * pressing it goes to the other one.
+ */
+function ViewToggle() {
+  const view = useDeck((s) => s.view);
+  const other: View = view === 'simple' ? 'advanced' : 'simple';
+  const word = view === 'simple' ? 'Simple' : 'Advanced';
+  return (
+    <button
+      type="button"
+      className="dd-view-toggle"
+      data-testid="view-toggle"
+      data-view={view}
+      aria-label={`${word} view. Switch to the ${other} view.`}
+      title={
+        view === 'simple'
+          ? 'Simple view: the big picture in plain words. Switch to Advanced  (S)'
+          : 'Advanced view: every block and arrow. Switch to Simple  (S)'
+      }
+      onClick={() => useDeck.getState().setView(other)}
+    >
+      {view === 'simple' ? <Shapes size={15} /> : <Network size={15} />}
+      <span key={view}>{word}</span>
+    </button>
+  );
+}
 
 const restCache = new WeakMap<DeckIndex, Map<Id, number>>();
 function restHeights(index: DeckIndex): Map<Id, number> {
@@ -78,7 +119,7 @@ function makeNode(box: Box, x: number, y: number, w: number, h: number): Node {
     focusable: false,
     zIndex: block ? 10 : box.depth,
     data: {},
-    handles: handlesFor(w, h, block),
+    handles: handlesFor(w, h, box.kind !== 'area'),
   };
 }
 
@@ -100,6 +141,10 @@ function Canvas() {
   const laying = useDeck((s) => s.laying);
   const layoutEpoch = useDeck((s) => s.layoutEpoch);
   const status = useDeck((s) => s.status);
+  const view = useDeck((s) => s.view);
+  const simple = useDeck((s) => s.simple);
+  const simpleLayout = useDeck((s) => s.simpleLayout);
+  const zoomStep = useDeck((s) => s.zoomStep);
   const level = useLevel();
   const rf = useReactFlow();
   const connecting = useConnection((c) => c.inProgress);
@@ -108,19 +153,44 @@ function Canvas() {
   const [labelLayer, setLabelLayer] = useState<Element | null>(null);
   const [zoomPct, setZoomPct] = useState(100);
 
-  const display: Display = useMemo(() => {
-    if (!index) return new Map();
+  const full: Display = useMemo(() => {
+    if (!index || view !== 'advanced') return NO_DISPLAY;
     const rest = restHeights(index);
     const st = { expanded, internals, testsOpen: (id: Id) => allTests !== testsToggled.has(id), run };
     const grown = expanded.size > 0 || allTests || testsToggled.size > 0;
     const height = (id: Id) =>
       grown && (expanded.has(id) || st.testsOpen(id)) ? blockHeight(index, id, st) : (rest.get(id) ?? 100);
     return computeDisplay(index, positions, height, (id) => rest.get(id) ?? 100);
-  }, [index, positions, expanded, internals, testsToggled, allTests, run]);
+  }, [index, view, positions, expanded, internals, testsToggled, allTests, run]);
+
+  // The simple view has its own arrangement: a few parts, laid out for their connections.
+  const parts: Display = useMemo(() => {
+    const out: Display = new Map();
+    if (view !== 'simple' || !simpleLayout) return out;
+    for (const [id, b] of simpleLayout.boxes)
+      out.set(id, {
+        id,
+        kind: 'part',
+        parent: null,
+        depth: 0,
+        x: b.x,
+        y: b.y,
+        w: b.w,
+        h: b.h,
+        ax: b.x,
+        ay: b.y,
+      });
+    return out;
+  }, [view, simpleLayout]);
+  const display = view === 'simple' ? parts : full;
 
   useEffect(() => {
     camera.setDisplay(display);
-  }, [display]);
+    // The simple view is fitted clear of the controls around it, and never magnified past full size.
+    camera.setFrame(view === 'simple' ? { top: 66, right: 36, bottom: 70, left: 36, maxZoom: 1 } : null);
+    const all = view === 'simple' ? simpleLayout?.bounds : undefined;
+    camera.setWhole(all ? { x: all.x, y: all.y, width: all.w, height: all.h } : null);
+  }, [display, view, simpleLayout]);
 
   // --- Nodes: areas always, blocks unless they are drawn as chips at System level.
   const nodeCache = useRef(new Map<Id, Node>());
@@ -199,7 +269,7 @@ function Canvas() {
             position: { x: mix(f.position.x, n.position.x), y: mix(f.position.y, n.position.y) },
             width: w,
             height: h,
-            handles: handlesFor(w, h, n.type === 'block'),
+            handles: handlesFor(w, h, n.type !== 'area'),
           };
         }),
       );
@@ -212,6 +282,19 @@ function Canvas() {
   // --- Arrows, with each one given its own spot along the side it attaches to.
   const edges = useMemo(() => {
     if (!index) return [];
+    if (view === 'simple')
+      return (simple?.links ?? [])
+        .filter((l) => !l.hidden && display.has(l.from) && display.has(l.to))
+        .map<Edge>((l) => ({
+          id: l.id,
+          source: l.from,
+          target: l.to,
+          sourceHandle: 'cs',
+          targetHandle: 'ct',
+          type: 'plain',
+          selectable: false,
+          focusable: false,
+        }));
     const links = level === 'system' ? index.areaLinks : index.links;
     type End = { key: string; other: number };
     const sides = new Map<string, End[]>();
@@ -287,7 +370,7 @@ function Canvas() {
         r: rank.get(p.id) ?? 0,
       },
     }));
-  }, [index, display, level]);
+  }, [index, display, level, view, simple]);
 
   // --- Chips for System level.
   const chips = useMemo(() => {
@@ -308,12 +391,12 @@ function Canvas() {
   }, [display, level, index, run]);
 
   const titles = useMemo(() => {
-    if (level === 'system') return [];
+    if (level === 'system' || view === 'simple') return [];
     const out: { id: Id; x: number; y: number; w: number }[] = [];
     for (const box of display.values())
       if (box.kind === 'area') out.push({ id: box.id, x: box.ax, y: box.ay, w: box.w });
     return out;
-  }, [display, level]);
+  }, [display, level, view]);
 
   // --- Camera.
   const fitted = useRef(-1);
@@ -332,7 +415,12 @@ function Canvas() {
     const el = wrap.current;
     if (!el) return;
     const observer = new ResizeObserver(() => {
-      if (roomAtFit.current || fitted.current < 0 || !hasRoom(wrap.current)) return;
+      if (fitted.current < 0 || !hasRoom(wrap.current)) return;
+      const st = useDeck.getState();
+      // The simple view stays fitted to its window until someone moves it. The panel opening
+      // is not the window changing: the picture keeps its size and gives up its right side.
+      const follow = st.view === 'simple' && camera.atFit && !st.panelOpen;
+      if (roomAtFit.current && !follow) return;
       roomAtFit.current = true;
       camera.fit(false);
     });
@@ -340,11 +428,69 @@ function Canvas() {
     return () => observer.disconnect();
   }, []);
 
+  // Each view keeps its own camera. Going to the other one returns to where it was left, or
+  // fits it the first time. Drilling in from a part goes straight to that part's area.
+  type Place = { at: { x: number; y: number; zoom: number }; fitted: boolean };
+  const shown = useRef<View | null>(null);
+  const left = useRef<Partial<Record<View, Place>>>({});
+  const heading = useRef<{ until: number; to: Place | null }>({ until: 0, to: null });
+  useEffect(() => {
+    if (display.size === 0 || shown.current === view) return;
+    const from = shown.current;
+    shown.current = view;
+    if (from === null) return; // the first paint is fitted above
+    // Leaving a view while its camera is still travelling: what is kept is where it was going.
+    if (performance.now() >= heading.current.until)
+      left.current[from] = { at: camera.viewport(), fitted: camera.atFit };
+    else if (heading.current.to) left.current[from] = heading.current.to;
+    else delete left.current[from];
+    requestAnimationFrame(() => {
+      const st = useDeck.getState();
+      const focus = st.viewFocus;
+      const back = left.current[view];
+      const now = performance.now();
+      if (focus && camera.box(Array.isArray(focus) ? focus[0]! : focus)) {
+        camera.flyTo(focus);
+        heading.current = { until: now + 460, to: null };
+      } else if (back && !back.fitted) {
+        camera.moved();
+        void rf.setViewport(back.at, { duration: 300 });
+        heading.current = { until: now + 340, to: back };
+      } else {
+        // It was showing everything, or has never been shown: show everything.
+        camera.fit();
+        heading.current = { until: now + 400, to: back ?? null };
+      }
+      if (focus) st.set({ viewFocus: null });
+    });
+  }, [view, display, rf]);
+
+  // A request or a new connection changes the simple view's arrangement. While nobody has
+  // moved the camera, the whole picture is kept in view. Otherwise the selection is.
+  const arranged = useRef(simpleLayout);
+  useEffect(() => {
+    if (arranged.current === simpleLayout) return;
+    const first = arranged.current === null;
+    arranged.current = simpleLayout;
+    if (first || view !== 'simple' || shown.current !== 'simple') return;
+    const st = useDeck.getState();
+    requestAnimationFrame(() => {
+      if (camera.atFit && !st.panelOpen) camera.fit();
+      else if (st.selectedId && camera.box(st.selectedId)) camera.reveal(st.selectedId);
+    });
+  }, [simpleLayout, view]);
+
   const bandRef = useRef(band);
   bandRef.current = band;
   const onMove = useCallback((_: unknown, vp: { zoom: number }) => {
     const next = bandFor(vp.zoom, bandRef.current);
     if (next !== bandRef.current) useDeck.getState().setBand(next);
+    // The simple view's cards follow zoom in finer steps, with the same guard against flicker.
+    // Only that view listens, so only that view pays for it.
+    const st = useDeck.getState();
+    const exact = vp.zoom * ZOOM_STEPS;
+    if (st.view === 'simple' && (exact >= st.zoomStep + 1.03 || exact < st.zoomStep - 0.03))
+      st.set({ zoomStep: zoomStepOf(vp.zoom) });
     setZoomPct((prev) => {
       const pct = Math.round(vp.zoom * 100);
       return pct === prev ? prev : pct;
@@ -397,6 +543,7 @@ function Canvas() {
     <div
       className="dd-flow"
       ref={wrap}
+      data-view={view}
       data-level={level}
       data-band={band}
       data-connecting={connecting ? '1' : '0'}
@@ -417,6 +564,9 @@ function Canvas() {
             }}
             onNodesChange={onNodesChange}
             onMove={onMove}
+            onMoveStart={(event) => {
+              if (event) camera.moved();
+            }}
             minZoom={MIN_ZOOM}
             maxZoom={MAX_ZOOM}
             onlyRenderVisibleElements
@@ -426,7 +576,7 @@ function Canvas() {
             nodeDragThreshold={3}
             snapToGrid
             snapGrid={[8, 8]}
-            nodesConnectable={level === 'blocks'}
+            nodesConnectable={view === 'simple' ? partLod(zoomStep) === 'full' : level === 'blocks'}
             elementsSelectable={false}
             nodesFocusable={false}
             edgesFocusable={false}
@@ -442,17 +592,19 @@ function Canvas() {
             onNodeClick={(_, node) => {
               const st = useDeck.getState();
               if (node.type === 'area' && level !== 'system') st.select(null);
-              else st.select(node.id);
+              else st.select(node.id, { later: node.type === 'part' });
             }}
             onNodeDoubleClick={(_, node) => {
-              if (node.type === 'block' || level === 'system')
+              // A part opens: the advanced view, at that part's area.
+              if (node.type === 'part') useDeck.getState().setView('advanced', { focus: node.id });
+              else if (node.type === 'block' || level === 'system')
                 useDeck.getState().select(node.id, { fly: true });
             }}
             onEdgeClick={(_, edge) => useDeck.getState().select(edge.id)}
             onPaneClick={() => useDeck.getState().select(null)}
             onNodeMouseEnter={(_, node) => {
               if (dragging.current) return;
-              if (node.type === 'block' || level === 'system') useDeck.getState().hover(node.id);
+              if (node.type !== 'area' || level === 'system') useDeck.getState().hover(node.id);
             }}
             onNodeMouseLeave={() => useDeck.getState().hover(null)}
             onEdgeMouseEnter={(_, edge) => useDeck.getState().hover(edge.id)}
@@ -500,7 +652,8 @@ function Canvas() {
         </LabelLayer.Provider>
       </ChipContext.Provider>
 
-      <MiniMap index={index} display={display} />
+      <ViewToggle />
+      {view === 'advanced' ? <MiniMap index={index} display={display} /> : null}
       <div className="dd-controls">
         <button
           type="button"
@@ -532,10 +685,19 @@ function Canvas() {
         </button>
         <span className="dd-sep" />
         <span className="dd-level" data-testid="level">
-          <b>{LEVEL_NAME[level]}</b> · {zoomPct}%
+          <b>{view === 'simple' ? 'Simple' : LEVEL_NAME[level]}</b> · {zoomPct}%
+          {view === 'simple' && simple && simple.connections.drawn < simple.connections.built ? (
+            <span
+              data-testid="connections-note"
+              title="There are more connections than a picture can hold. The busiest are drawn. Each part's panel lists all of its own."
+            >
+              {' '}
+              · {simple.connections.drawn} of {simple.connections.built} connections
+            </span>
+          ) : null}
         </span>
       </div>
-      {laying || status === 'loading' ? (
+      {status === 'loading' || (view === 'simple' ? !simpleLayout && status === 'ready' : laying) ? (
         <div className="dd-loading">{status === 'loading' ? 'Loading the deck…' : 'Arranging the map…'}</div>
       ) : null}
       <span

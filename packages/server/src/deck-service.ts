@@ -12,6 +12,10 @@ import {
 import {
   type AgentWorker,
   ClaudeWorker,
+  describeConnections,
+  describePart,
+  type PlainPart,
+  plainKey,
   ScriptedWorker,
   summarizeBlock,
   summaryKey,
@@ -33,6 +37,9 @@ import {
 } from '@decker/core';
 import {
   type Bullet,
+  buildIndex,
+  buildSimple,
+  connectionKey,
   type DeckBundle,
   type DeckLayout,
   type DeckNotes,
@@ -41,6 +48,7 @@ import {
   type Id,
   layoutSchema,
   notesSchema,
+  renderDeckText,
   type ServerEvent,
   type TestRun,
 } from '@decker/deck-model';
@@ -58,6 +66,18 @@ export interface ServiceOptions {
 interface CachedSummary {
   summary?: string;
   bullets: { text: string; startLine: number; endLine: number }[];
+}
+
+/** A summarizer's plain-language answers for the simple view, by what it was shown (spec §3.13). */
+interface PlainCache {
+  parts: Record<string, PlainPart>;
+  connections: Record<string, string>;
+}
+
+/** What the summarizer is shown, and so what its answers are cached by. */
+interface PlainAsk {
+  parts: { id: Id; name: string; outline: string; key: string }[];
+  connections: { pair: string; line: string; key: string }[];
 }
 
 export class DeckService implements DeckHost {
@@ -82,6 +102,8 @@ export class DeckService implements DeckHost {
   private poll: ReturnType<typeof setInterval> | null = null;
   private summaries: Record<string, CachedSummary> = {};
   private summarizing = false;
+  private plain: PlainCache = { parts: {}, connections: {} };
+  private describing = false;
   private checking = false;
   lastExtractMs = 0;
 
@@ -119,6 +141,7 @@ export class DeckService implements DeckHost {
         : this.workerName;
     this.coordinator = new Coordinator(this, this.gitRoot ? worker : null);
     this.summaries = this.dir.readCache<Record<string, CachedSummary>>('summaries.json') ?? {};
+    this.plain = this.dir.readCache<PlainCache>('plain.json') ?? { parts: {}, connections: {} };
   }
 
   async init(options: ServiceOptions = {}): Promise<void> {
@@ -169,7 +192,7 @@ export class DeckService implements DeckHost {
       ids: this.dir.ids(),
       renames: this.gitRoot ? renames(this.root, commit) : {},
     });
-    this.current = this.withSummaries(result.snapshot);
+    this.current = this.withPlain(this.withSummaries(result.snapshot));
     this.currentIds = result.ids;
     this.suggestions = result.suggestions;
     this.lastExtractMs = result.ms;
@@ -418,6 +441,153 @@ export class DeckService implements DeckHost {
       if (todo.length) this.dir.writeCache('summaries.json', this.summaries);
     } finally {
       this.summarizing = false;
+    }
+    // The simple view is described from the finished outline, so it comes last.
+    await this.describe();
+  }
+
+  // ---- The simple view in a summarizer's words (spec §3.13) ----
+
+  /** What would be shown to the summarizer for the map as it is: one outline per area, one line per connection. */
+  private plainAsk(snapshot: DeckSnapshot, config: NonNullable<DeckSettings['summarizer']>): PlainAsk {
+    // Asked of the code alone: a summarizer's earlier answers are not part of the question.
+    const bare: DeckSnapshot = {
+      ...snapshot,
+      connections: undefined,
+      nodes: snapshot.nodes.map((n) =>
+        n.kind === 'area'
+          ? {
+              ...n,
+              summary: n.summary?.origin === 'summarized' ? undefined : n.summary,
+              bullets: n.bullets.filter((b) => b.origin !== 'summarized'),
+            }
+          : n,
+      ),
+    };
+    const index = buildIndex(bare);
+    const simple = buildSimple(index, null);
+    const parts = simple.parts
+      .filter((p) => p.node.kind === 'area')
+      .map((p) => {
+        const outline = renderDeckText(index, { focus: [p.id] });
+        return { id: p.id, name: p.name, outline, key: plainKey(outline, config) };
+      });
+    const connections = simple.links
+      .filter((l) => !l.wiring && l.asks.length > 0 && l.edges.some((e) => e.evidence.length > 0))
+      .map((l) => {
+        const asks = l.asks
+          .slice(0, 8)
+          .map((a) => a.text)
+          .join('; ');
+        const line = `${simple.partById.get(l.from)?.name} -> ${simple.partById.get(l.to)?.name}: ${asks}`;
+        return { pair: connectionKey(l.from, l.to), line, key: plainKey(line, config) };
+      });
+    return { parts, connections };
+  }
+
+  private plainPatch(
+    id: Id,
+    existing: Bullet | undefined,
+    p: PlainPart,
+  ): { summary?: Bullet; bullets: Bullet[] } {
+    return {
+      summary:
+        existing ??
+        (p.summary
+          ? { id: hashId('bullet', `${id}:plain-summary`), text: p.summary, origin: 'summarized' }
+          : undefined),
+      bullets: p.does.map((text, i) => ({
+        id: hashId('bullet', `${id}:plain:${i}:${text}`),
+        text,
+        origin: 'summarized' as const,
+      })),
+    };
+  }
+
+  private plainConnections(ask: PlainAsk): Record<string, Bullet> {
+    const out: Record<string, Bullet> = {};
+    for (const c of ask.connections) {
+      const text = this.plain.connections[c.key];
+      if (text) out[c.pair] = { id: hashId('bullet', `${c.pair}:plain:${text}`), text, origin: 'summarized' };
+    }
+    return out;
+  }
+
+  private withPlain(snapshot: DeckSnapshot): DeckSnapshot {
+    const config = this.settings().summarizer;
+    if (!config) return snapshot;
+    const ask = this.plainAsk(snapshot, config);
+    const byId = new Map(ask.parts.map((p) => [p.id, p]));
+    const connections = this.plainConnections(ask);
+    return {
+      ...snapshot,
+      ...(Object.keys(connections).length ? { connections } : {}),
+      nodes: snapshot.nodes.map((n) => {
+        const cached = this.plain.parts[byId.get(n.id)?.key ?? ''];
+        if (!cached) return n;
+        const patch = this.plainPatch(n.id, n.summary, cached);
+        return { ...n, summary: patch.summary, bullets: [...n.bullets, ...patch.bullets] };
+      }),
+    };
+  }
+
+  private async describe(): Promise<void> {
+    const config = this.settings().summarizer;
+    if (!config || this.describing) return;
+    this.describing = true;
+    try {
+      const ask = this.plainAsk(this.current, config);
+      const parts = ask.parts.filter((p) => !this.plain.parts[p.key]);
+      let next = 0;
+      const worker = async () => {
+        while (next < parts.length) {
+          const part = parts[next++]!;
+          try {
+            const result = await describePart(config, part.name, part.outline, AbortSignal.timeout(60_000));
+            this.plain.parts[part.key] = result;
+            const node = this.current.nodes.find((n) => n.id === part.id);
+            if (!node) continue;
+            const patch = this.plainPatch(
+              part.id,
+              node.summary?.origin === 'summarized' ? undefined : node.summary,
+              result,
+            );
+            const bullets = [...node.bullets.filter((b) => b.origin !== 'summarized'), ...patch.bullets];
+            this.current = {
+              ...this.current,
+              nodes: this.current.nodes.map((n) =>
+                n.id === part.id ? { ...n, summary: patch.summary, bullets } : n,
+              ),
+            };
+            this.emit({ type: 'summary', nodeId: part.id, summary: patch.summary, bullets: patch.bullets });
+          } catch {
+            // No description for this area. The simple view falls back to the code's own words.
+          }
+        }
+      };
+      await Promise.all([worker(), worker()]);
+
+      const lines = ask.connections.filter((c) => !(c.key in this.plain.connections));
+      if (lines.length) {
+        try {
+          const labels = await describeConnections(
+            config,
+            lines.map((c) => c.line),
+            AbortSignal.timeout(60_000),
+          );
+          lines.forEach((c, i) => {
+            this.plain.connections[c.key] = labels[i] ?? '';
+          });
+        } catch {
+          // No labels. The simple view derives them from what is called.
+        }
+        const connections = this.plainConnections(ask);
+        this.current = { ...this.current, connections };
+        this.emit({ type: 'connections', connections });
+      }
+      if (parts.length || lines.length) this.dir.writeCache('plain.json', this.plain);
+    } finally {
+      this.describing = false;
     }
   }
 }

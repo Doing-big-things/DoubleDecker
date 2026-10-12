@@ -28,6 +28,8 @@ export interface DeckSource {
   runChecks(): Promise<void>;
   confirmRename(id: Id): Promise<void>;
   subscribe(handler: (event: ServerEvent) => void): () => void;
+  /** Resolves once pushed events are arriving, so that nothing falls between loading and listening. */
+  listening(): Promise<void>;
 }
 
 function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number): (...args: A) => void {
@@ -127,15 +129,28 @@ class FixtureSource implements DeckSource {
   subscribe(): () => void {
     return () => {};
   }
+
+  async listening(): Promise<void> {}
 }
 
 class ServerSource implements DeckSource {
   mode = 'server' as const;
   label = 'server';
   private token: string;
+  private open = false;
+  private waiting: (() => void)[] = [];
 
   constructor(token: string) {
     this.token = token;
+  }
+
+  listening(): Promise<void> {
+    if (this.open) return Promise.resolve();
+    // Never held up for long: a map without live updates is better than no map.
+    return new Promise((resolve) => {
+      this.waiting.push(resolve);
+      setTimeout(resolve, 2000);
+    });
   }
 
   private async api<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -234,6 +249,8 @@ class ServerSource implements DeckSource {
       socket = new WebSocket(`${proto}://${location.host}/api/events`, ['decker', `t.${this.token}`]);
       socket.onopen = () => {
         retry = 500;
+        this.open = true;
+        for (const resolve of this.waiting.splice(0)) resolve();
       };
       socket.onmessage = (m) => {
         try {

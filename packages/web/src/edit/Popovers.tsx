@@ -130,6 +130,53 @@ function EdgeForm({ from, to, x, y }: { from: string; to: string; x: number; y: 
   );
 }
 
+/** The simple view's version: one sentence, in the asker's own words (spec §3.13). */
+function ConnectionForm({ from, to, x, y }: { from: string; to: string; x: number; y: number }) {
+  const deck = useDeck((s) => s.simple);
+  const [text, setText] = useState('');
+  const st = useDeck.getState;
+  const a = deck?.partById.get(from)?.name ?? '';
+  const b = deck?.partById.get(to)?.name ?? '';
+  const submit = () => {
+    if (!text.trim()) return;
+    st().askConnection(from, to, text);
+    st().set({ popover: null });
+  };
+  return (
+    <Frame x={x} y={y} onSubmit={submit} testId="connection-form">
+      <h4>
+        {a} → {b}
+      </h4>
+      <label htmlFor="dd-connection-text">
+        What should {a} ask {b} to do?
+      </label>
+      <input
+        id="dd-connection-text"
+        className="dd-input"
+        value={text}
+        maxLength={120}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Say it in your own words"
+        autoFocus
+        data-testid="connection-text"
+      />
+      <div className="dd-popover-foot">
+        <button type="button" className="dd-btn is-ghost" onClick={() => st().set({ popover: null })}>
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="dd-btn is-primary"
+          disabled={!text.trim()}
+          data-testid="connection-submit"
+        >
+          Add request
+        </button>
+      </div>
+    </Frame>
+  );
+}
+
 function BlockForm({
   parentId,
   x,
@@ -225,7 +272,10 @@ function RenameForm({ targetId, x, y }: { targetId: string; x: number; y: number
 
 export function Popovers() {
   const popover = useDeck((s) => s.popover);
+  const simple = useDeck((s) => s.view === 'simple');
   if (!popover) return null;
+  if (popover.kind === 'edge' && simple)
+    return <ConnectionForm key={`${popover.from}${popover.to}`} {...popover} />;
   if (popover.kind === 'edge') return <EdgeForm key={`${popover.from}${popover.to}`} {...popover} />;
   if (popover.kind === 'block') return <BlockForm key={popover.parentId} {...popover} />;
   return <RenameForm key={popover.targetId} {...popover} />;

@@ -24,6 +24,7 @@ import { testGroups } from '../model/measure';
 import { currentRun, type Peek, useDeck, visualState } from '../state/store';
 import { CodePeek, DiffView } from './CodePeek';
 import { ReviewPanel } from './ReviewPanel';
+import { ConnectionPanel, PartPanel } from './SimplePanel';
 
 const ORIGIN: Record<string, string> = {
   doc: 'doc comment',
@@ -779,12 +780,18 @@ export function DetailPanel() {
   const index = useDeck((s) => s.index);
   const selectedId = useDeck((s) => s.selectedId);
   const review = useDeck((s) => s.review);
+  const view = useDeck((s) => s.view);
+  const simple = useDeck((s) => s.simple);
   const [resizing, setResizing] = useState(false);
   const start = useRef({ x: 0, w: 0 });
 
   if (!index || (!selectedId && !review) || (!open && !review)) return null;
-  const node = selectedId ? index.byId.get(selectedId) : undefined;
-  const link = selectedId && !node ? linkOf(index, selectedId) : undefined;
+  // The simple view has panels of its own: the same things, said in plain words.
+  const plain = view === 'simple' && simple ? simple : null;
+  const part = plain && selectedId ? plain.partById.get(selectedId) : undefined;
+  const connection = plain && selectedId ? plain.linkById.get(selectedId) : undefined;
+  const node = selectedId && !plain ? index.byId.get(selectedId) : undefined;
+  const link = selectedId && !plain && !node ? linkOf(index, selectedId) : undefined;
 
   return (
     <aside className="dd-panel" style={{ width }} data-testid="panel" aria-label="Details">
@@ -807,7 +814,9 @@ export function DetailPanel() {
       {node?.kind === 'block' ? <BlockPanel block={node} index={index} /> : null}
       {node?.kind === 'area' ? <AreaPanel area={node} index={index} /> : null}
       {link ? <LinkPanel link={link} index={index} /> : null}
-      {!node && !link && review ? <ReviewPanel /> : null}
+      {part && plain ? <PartPanel part={part} deck={plain} index={index} /> : null}
+      {connection && plain ? <ConnectionPanel link={connection} deck={plain} /> : null}
+      {!node && !link && !part && !connection && review ? <ReviewPanel /> : null}
     </aside>
   );
 }

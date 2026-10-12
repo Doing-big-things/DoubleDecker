@@ -87,6 +87,11 @@ export interface DeckSnapshot {
   tests: DeckTest[];
   gaps: Gap[];
   stats?: SnapshotStats;
+  /**
+   * What one top-level area asks of another, in plain words, by "from>to" (spec §3.13).
+   * Never extracted from code: written by a summarizer, or by hand in a fixture.
+   */
+  connections?: Record<string, Bullet>;
 }
 
 // ---- Evidence (not part of the snapshot; stored per commit) ----
@@ -139,6 +144,11 @@ export interface DeckNotes {
   dismissed: Id[];
   /** What an accepted arrow was asked to be: its kind and label, by edge id. */
   edges?: Record<Id, { kind: EdgeKind; label?: string; tests?: string[] }>;
+  /**
+   * The simple view in the engineer's own words (spec §3.13): what an area is for, by area id,
+   * and what one area asks of another, by "from>to".
+   */
+  plain?: { summaries?: Record<Id, string>; connections?: Record<string, string> };
 }
 
 // ---- Changes (spec §3.8, §6) ----
@@ -340,6 +350,7 @@ export type ServerEvent =
   | { type: 'change'; change: Change }
   | { type: 'progress'; changeId: Id; text: string; at: string }
   | { type: 'summary'; nodeId: Id; summary?: Bullet; bullets: Bullet[] }
+  | { type: 'connections'; connections: Record<string, Bullet> }
   | { type: 'checks'; running: boolean };
 
 export interface AgentEvent {

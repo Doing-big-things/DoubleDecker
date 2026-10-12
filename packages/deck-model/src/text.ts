@@ -1,4 +1,11 @@
-import { bestBullet, type DeckIndex, isInternal, operationsOf, shortSignature } from './derive.ts';
+import {
+  bestBullet,
+  blocksUnder,
+  type DeckIndex,
+  isInternal,
+  operationsOf,
+  shortSignature,
+} from './derive.ts';
 import type { Bullet, ChangeOp, DeckNode, Id } from './types.ts';
 
 const COL = 44;
@@ -33,6 +40,11 @@ export function renderDeckText(index: DeckIndex, options: DeckTextOptions = {}):
   if (options.focus) {
     focus = new Set<Id>();
     for (const id of options.focus) {
+      // A request made of a whole area is about every block in it.
+      if (index.byId.get(id)?.kind === 'area') {
+        for (const b of blocksUnder(index, id)) focus.add(b.id);
+        continue;
+      }
       const block = index.blockOf.get(id) ?? id;
       focus.add(block);
       for (const l of index.linksOut.get(block) ?? []) focus.add(l.to);
@@ -130,6 +142,18 @@ export function renderDeckText(index: DeckIndex, options: DeckTextOptions = {}):
   const renderArea = (area: DeckNode, depth: number) => {
     if (!hasFocus(area)) return;
     out.push(`${'#'.repeat(Math.min(6, depth + 1))} area: ${area.name}${tag(area.id)}`);
+    if (area.summary) out.push(`${area.summary.text.replace(/\.$/, '')}.`);
+    for (const text of addedBullets.get(area.id) ?? [])
+      out.push(row(`▪ ${text}`, '[requested of this area]'));
+    for (const op of ops) {
+      if (op.type !== 'add_edge') continue;
+      const what = op.label ?? op.kind;
+      if (op.from === area.id) {
+        out.push(row(`-> ${name(op.to)}: ${what}`, '[requested between these areas]'));
+        for (const text of op.bullets) out.push(row(`   ▪ ${text}`, '[requested]'));
+      } else if (op.to === area.id)
+        out.push(row(`<- ${name(op.from)}: ${what}`, '[requested between these areas]'));
+    }
     for (const c of index.children.get(area.id) ?? []) {
       if (c.kind === 'area') renderArea(c, depth + 1);
       else if (c.kind === 'block' && (!focus || focus.has(c.id))) renderBlock(c, depth + 1);
@@ -173,6 +197,9 @@ export function describeOp(index: DeckIndex, op: ChangeOp, all: readonly ChangeO
     case 'add_behavior':
       return `Add “${op.text}” to ${name(op.targetId)}`;
     case 'add_edge': {
+      // Between two areas it is a connection asked for in plain words (spec §3.13).
+      if (index.byId.get(op.from)?.kind === 'area' && index.byId.get(op.to)?.kind === 'area')
+        return `Connect ${name(op.from)} to ${name(op.to)}${op.label ? `: ${op.label}` : ''}`;
       const kind = op.kind === 'api' ? 'API' : op.kind;
       return `New ${kind} arrow ${name(op.from)} → ${name(op.to)}${op.label ? `: ${op.label}` : ''}`;
     }

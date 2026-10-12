@@ -5,6 +5,8 @@ export type Level = 'system' | 'architecture' | 'blocks';
 export const canvas = (page: Page): Locator => page.getByTestId('canvas');
 export const block = (page: Page, name: string): Locator =>
   page.locator(`[data-testid="block"][data-name="${name}"]`);
+export const part = (page: Page, name: string): Locator =>
+  page.locator(`[data-testid="part"][data-name="${name}"]`);
 export const arrow = (page: Page, from: string, to: string): Locator =>
   page.locator(`[data-testid="arrow"][data-from="${from}"][data-to="${to}"]`);
 
@@ -15,8 +17,11 @@ export async function ready(page: Page): Promise<void> {
   await page.waitForTimeout(400);
 }
 
-export async function openFixture(page: Page, name = 'shop'): Promise<void> {
-  await page.goto(`/?fixture=${name}`);
+/** The app opens in the simple view. Tests of the full map ask for the advanced one. */
+export type View = 'simple' | 'advanced';
+
+export async function openFixture(page: Page, name = 'shop', view: View = 'advanced'): Promise<void> {
+  await page.goto(`/?fixture=${name}&view=${view}`);
   await ready(page);
 }
 

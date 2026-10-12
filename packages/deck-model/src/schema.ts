@@ -78,6 +78,7 @@ export const snapshotSchema = z.object({
       resolvedImports: z.number(),
     })
     .optional(),
+  connections: z.record(z.string(), bulletSchema).optional(),
 });
 
 const point = z.object({ x: z.number(), y: z.number() });
@@ -102,6 +103,12 @@ export const notesSchema = z.object({
         tests: z.array(z.string()).optional(),
       }),
     )
+    .optional(),
+  plain: z
+    .object({
+      summaries: z.record(z.string(), z.string().max(400)).optional(),
+      connections: z.record(z.string(), z.string().max(200)).optional(),
+    })
     .optional(),
 });
 

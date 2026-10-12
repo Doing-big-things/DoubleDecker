@@ -11,6 +11,10 @@ import { ReviewBanner } from './panel/ReviewPanel';
 import { useDeck } from './state/store';
 
 const SHORTCUTS: [string, string][] = [
+  ['Simple or advanced view', 'S · the switch at the top right'],
+  ['Open a part (simple view)', 'Double-click · Enter'],
+  ['Ask for something (simple view)', 'N · “Ask for something new”'],
+  ['Ask for a connection (simple view)', 'Drag from one part’s edge to another'],
   ['Pan', 'Drag the canvas · Shift + arrows'],
   ['Zoom at the cursor', 'Wheel or pinch · + / −'],
   ['Fit everything', '0'],

@@ -27,6 +27,7 @@ export function TopBar() {
   const outlineOpen = useDeck((s) => s.outlineOpen);
   const allTests = useDeck((s) => s.allTests);
   const checksRunning = useDeck((s) => s.checksRunning);
+  const simple = useDeck((s) => s.view === 'simple');
   const st = useDeck.getState;
 
   const total = stats ? stats.callSites + stats.imports : 0;
@@ -90,7 +91,7 @@ export function TopBar() {
         data-testid="search"
       >
         <Search size={14} />
-        Search blocks, operations, tests…
+        {simple ? 'Search…' : 'Search blocks, operations, tests…'}
         <span className="dd-kbd">Ctrl K</span>
       </button>
 
@@ -124,28 +125,32 @@ export function TopBar() {
           {checksRunning ? 'Checking…' : 'Run checks'}
         </button>
       ) : null}
-      <button
-        type="button"
-        className={`dd-icon-btn${allTests ? ' is-on' : ''}`}
-        style={allTests ? { color: 'var(--accent)' } : undefined}
-        aria-label="All tests"
-        aria-pressed={allTests}
-        title="Open every tests drawer  (Shift+T)"
-        data-testid="all-tests"
-        onClick={() => st().toggleAllTests()}
-      >
-        <FlaskConical size={15} />
-      </button>
-      <button
-        type="button"
-        className="dd-icon-btn"
-        aria-label="Tidy up"
-        title="Tidy up: lay the map out again"
-        data-testid="tidy"
-        onClick={() => void st().tidy()}
-      >
-        <LayoutGrid size={15} />
-      </button>
+      {simple ? null : (
+        <>
+          <button
+            type="button"
+            className={`dd-icon-btn${allTests ? ' is-on' : ''}`}
+            style={allTests ? { color: 'var(--accent)' } : undefined}
+            aria-label="All tests"
+            aria-pressed={allTests}
+            title="Open every tests drawer  (Shift+T)"
+            data-testid="all-tests"
+            onClick={() => st().toggleAllTests()}
+          >
+            <FlaskConical size={15} />
+          </button>
+          <button
+            type="button"
+            className="dd-icon-btn"
+            aria-label="Tidy up"
+            title="Tidy up: lay the map out again"
+            data-testid="tidy"
+            onClick={() => void st().tidy()}
+          >
+            <LayoutGrid size={15} />
+          </button>
+        </>
+      )}
       <button
         type="button"
         className={`dd-btn${trayOpen ? ' is-on' : ''}`}

@@ -2014,6 +2014,462 @@ textarea.dd-input {
   outline: none;
 }
 
+/* ---------- The simple view (spec §3.13): a few large parts in plain words ---------- */
+.dd-view-toggle {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  min-width: 122px;
+  padding: 0 14px 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--chrome);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.004em;
+  transition:
+    border-color 120ms,
+    background 120ms;
+}
+.dd-view-toggle:hover {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+.dd-view-toggle svg {
+  flex: none;
+  color: var(--accent);
+}
+.dd-view-toggle span {
+  animation: dd-word 160ms ease-out;
+}
+@keyframes dd-word {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+.dd-part {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, hsl(var(--h) 45% 62%) 30%, var(--line));
+  border-radius: 14px;
+  background: color-mix(in srgb, hsl(var(--h) 62% 62%) 5%, var(--surface));
+  transition:
+    border-color 120ms,
+    box-shadow 120ms,
+    opacity 160ms;
+}
+.dd-part:hover {
+  border-color: color-mix(in srgb, hsl(var(--h) 45% 62%) 55%, var(--line-strong));
+}
+.dd-part.is-selected {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 0 6px var(--accent-soft);
+}
+/* Common ground: quieter than the parts that rest on it. */
+.dd-part.is-common {
+  background: color-mix(in srgb, var(--surface) 50%, var(--canvas));
+}
+.dd-part.is-requested {
+  border-style: dashed;
+  border-color: var(--requested);
+  background: color-mix(in srgb, var(--requested) 5%, var(--surface));
+}
+.dd-part-body {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 14px 20px 10px;
+  overflow: hidden;
+  border-radius: 13px;
+  font-size: calc(14.5px * var(--ps, 1));
+  line-height: calc(21px * var(--ps, 1));
+}
+.dd-part-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: calc(26px * var(--ps, 1));
+  flex: none;
+  min-width: 0;
+}
+.dd-part-name {
+  font-size: calc(18px * var(--ps, 1));
+  line-height: calc(26px * var(--ps, 1));
+  font-weight: 650;
+  letter-spacing: -0.014em;
+  color: hsl(var(--h) 52% var(--area-text-l));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.dd-part-open {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 4px 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font-size: 14.5px;
+  font-weight: 500;
+  opacity: 0;
+  transition:
+    opacity 120ms,
+    background 120ms,
+    color 120ms;
+}
+.dd-part:hover .dd-part-open,
+.dd-part.is-selected .dd-part-open,
+.dd-part-open:focus-visible {
+  opacity: 1;
+}
+.dd-part-open:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.dd-part-summary {
+  flex: none;
+  margin-top: calc(2px * var(--ps, 1));
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.dd-part-rows {
+  flex: none;
+  margin-top: calc(8px * var(--ps, 1));
+}
+.dd-part-row {
+  display: flex;
+  margin-bottom: calc(2px * var(--ps, 1));
+}
+.dd-part-row:last-child {
+  margin-bottom: 0;
+}
+.dd-part-row > i {
+  flex: none;
+  width: calc(5px * var(--ps, 1));
+  height: calc(5px * var(--ps, 1));
+  margin: calc(8px * var(--ps, 1)) calc(10px * var(--ps, 1)) 0 0;
+  border-radius: 50%;
+  background: hsl(var(--h) 40% 62% / 0.85);
+}
+.dd-part-row > span {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+/* Asked for on the map and built: a person's words, kept. */
+.dd-part-row.is-asked > i {
+  border-radius: 1px;
+  background: var(--accent);
+}
+.dd-part-row.is-requested {
+  color: var(--requested);
+  box-shadow: -11px 0 0 -9px var(--requested);
+}
+.dd-part-row.is-requested > i {
+  background: var(--requested);
+}
+.dd-part-more {
+  height: calc(21px * var(--ps, 1));
+  padding-left: calc(15px * var(--ps, 1));
+  color: var(--faint);
+}
+.dd-part-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  margin-top: auto;
+}
+.dd-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin-left: -8px;
+  padding: 0 12px 0 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font-weight: 450;
+  white-space: nowrap;
+  transition:
+    background 120ms,
+    color 120ms,
+    border-color 120ms;
+}
+.dd-part:hover .dd-ask {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+.dd-ask:hover {
+  color: var(--text);
+  border-color: var(--accent) !important;
+}
+.dd-ask svg {
+  flex: none;
+  color: var(--accent);
+}
+/* On a crowded card the invitation gives way before the counts beside it do. */
+.dd-ask {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.dd-ask > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dd-ask-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--canvas);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.dd-ask-input::placeholder {
+  color: var(--faint);
+}
+.dd-part-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  margin-left: auto;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dd-part-tests {
+  flex: none;
+  display: inline-flex;
+}
+.dd-part-tests .dd-chip {
+  font-size: 14.5px;
+  cursor: default;
+}
+.dd-part-tests .dd-chip:hover {
+  background: none;
+}
+.dd-part-flag {
+  position: absolute;
+  left: 16px;
+  top: 0;
+  transform: translateY(-55%);
+  display: flex;
+  z-index: 2;
+}
+.dd-part-flag .dd-badge {
+  font-size: calc(14.5px * var(--ps, 1));
+  line-height: 1.5;
+  border: 0;
+  background: color-mix(in srgb, var(--c) 22%, var(--canvas));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent);
+}
+button.dd-part-work:hover {
+  box-shadow: 0 0 0 1px var(--c);
+}
+.dd-part-work .dd-spin {
+  width: 9px;
+  height: 9px;
+}
+/* A common part: one slim bar that the rest of the picture stands on. */
+.dd-part-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 0 14px 0 20px;
+  overflow: hidden;
+  border-radius: 13px;
+  font-size: calc(14.5px * var(--ps, 1));
+  line-height: calc(21px * var(--ps, 1));
+}
+.dd-part-bar .dd-part-name {
+  flex: none;
+}
+.dd-part-bar-sum {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dd-part-bar-used {
+  flex: none;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.dd-part-bar .dd-ask {
+  margin-left: 0;
+}
+.dd-part-bar .dd-part-meta {
+  margin-left: 0;
+}
+/* Zoomed far out: the name alone. */
+.dd-part-far {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.35em;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 4px 12px;
+  overflow: hidden;
+  text-align: center;
+}
+.dd-part-far b {
+  max-width: 100%;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.014em;
+  color: hsl(var(--h) 52% var(--area-text-l));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dd-part:hover .dd-port {
+  opacity: 1;
+}
+
+/* Connections between parts: brighter than the advanced view's arrows, because here they are the picture. */
+.dd-plain path.dd-edge-line {
+  stroke: color-mix(in srgb, var(--edge-lit) 45%, var(--edge));
+  stroke-linecap: round;
+}
+.dd-plain path.dd-edge-head {
+  fill: color-mix(in srgb, var(--edge-lit) 45%, var(--edge));
+}
+.dd-plain-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--canvas);
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+  font-size: 14.5px;
+  line-height: 20px;
+  font-weight: 550;
+  text-align: center;
+  pointer-events: all;
+  cursor: default;
+  transition:
+    opacity 160ms,
+    border-color 120ms,
+    color 120ms;
+}
+.dd-plain-label > span:first-child {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.dd-plain-label:hover,
+.dd-plain-label.is-lit {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+.dd-plain-label.is-selected {
+  color: var(--text);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.dd-plain-label[data-s="requested"],
+.dd-plain-label[data-s="missing"] {
+  border-style: dashed;
+  border-color: var(--requested);
+  color: var(--requested);
+}
+.dd-plain-label[data-s="implemented"] {
+  border-color: var(--candidate);
+}
+.dd-plain-label[data-s="contradicted"] {
+  border-color: var(--contradicted);
+}
+.dd-plain-label[data-s="unrequested"] {
+  border-color: var(--unrequested);
+}
+.dd-plain-flag {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -78%);
+  white-space: nowrap;
+}
+.dd-plain-flag .dd-badge {
+  font-size: 14.5px;
+  line-height: 1.5;
+  background: color-mix(in srgb, var(--c) 22%, var(--canvas));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent);
+}
+
+.dd-ask-box {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+  margin-bottom: 4px;
+}
+.dd-ask-box textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+.dd-plain-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px;
+  font-size: 13px;
+}
+.dd-plain-line > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.dd-plain-line .dd-mini {
+  flex: none;
+  opacity: 0.55;
+}
+.dd-plain-line:hover .dd-mini {
+  opacity: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

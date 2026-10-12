@@ -21,7 +21,9 @@ function navigate(dir: Dir): void {
   const index = st.index;
   if (!index) return;
   const kind = levelOf(st.band) === 'system' ? 'area' : 'block';
-  const candidates = (kind === 'area' ? index.areas : index.blocks)
+  const candidates = (
+    st.view === 'simple' ? (st.simple?.parts ?? []) : kind === 'area' ? index.areas : index.blocks
+  )
     .map((n) => camera.box(n.id))
     .filter((b) => b !== undefined);
   if (candidates.length === 0) return;
@@ -196,6 +198,22 @@ export function useKeys(): void {
       }
       if (mod || e.altKey) return;
 
+      if (key === 's' || key === 'S') return st.setView(st.view === 'simple' ? 'advanced' : 'simple');
+      // The simple view has no cards to expand, tests drawers, renames or removals: its keys
+      // are moving about, opening a part, and asking for something.
+      if (st.view === 'simple') {
+        const part = st.selectedId ? st.simple?.partById.get(st.selectedId) : undefined;
+        if (key === 'Enter' && part) {
+          e.preventDefault();
+          return st.setView('advanced', { focus: part.id });
+        }
+        if ((key === 'n' || key === 'N') && part) {
+          e.preventDefault();
+          return st.set({ asking: part.id });
+        }
+        if (['Enter', 't', 'T', 'n', 'N', 'F2', 'Delete', 'Backspace'].includes(key)) return;
+      }
+
       const arrows: Record<string, Dir> = {
         ArrowLeft: 'left',
         ArrowRight: 'right',
@@ -227,7 +245,9 @@ export function useKeys(): void {
         case 'F':
           if (st.selectedId) {
             camera.record(st.selectedId);
-            const link = st.index ? linkOf(st.index, st.selectedId) : undefined;
+            const link =
+              st.simple?.linkById.get(st.selectedId) ??
+              (st.index ? linkOf(st.index, st.selectedId) : undefined);
             camera.flyTo(link ? [link.from, link.to] : st.selectedId);
           }
           return;

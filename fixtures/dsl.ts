@@ -2,6 +2,7 @@
 // this file only turns it into a DeckBundle with stable ids and plausible source text.
 import {
   type Bullet,
+  connectionKey,
   type DeckBundle,
   type DeckEdge,
   type DeckNode,
@@ -80,6 +81,8 @@ export class DeckBuilder {
   private opIds = new Map<string, string>();
   private blockIds = new Map<string, string>();
   private externals = new Map<string, string>();
+  private topAreas = new Map<string, string>();
+  private connections: Record<string, Bullet> = {};
   readonly systemId: string;
   readonly name: string;
 
@@ -100,6 +103,7 @@ export class DeckBuilder {
   area(name: string, body: () => void, summary?: string): void {
     const parentId = this.areaStack.at(-1) ?? this.systemId;
     const id = hashId('area', `${parentId}/${name}`);
+    if (parentId === this.systemId) this.topAreas.set(name, id);
     this.nodes.push({
       id,
       kind: 'area',
@@ -115,6 +119,34 @@ export class DeckBuilder {
     this.areaStack.push(id);
     body();
     this.areaStack.pop();
+  }
+
+  /**
+   * What the simple view says about a top-level area (spec §3.13): one line for what it is
+   * for, then what it does. It stands in for a summarizer's output and is marked as one.
+   */
+  plain(area: string, summary: string, does: string[] = []): void {
+    const id = this.topAreas.get(area);
+    const node = this.nodes.find((n) => n.id === id);
+    if (!id || !node) throw new Error(`fixture: unknown area "${area}"`);
+    node.summary = { id: hashId('bullet', `${id}:summary`), text: summary, origin: 'summarized' };
+    node.bullets = does.map((text, i) => ({
+      id: hashId('bullet', `${id}:plain:${i}`),
+      text,
+      origin: 'summarized',
+    }));
+  }
+
+  /** What one top-level area asks of another, in plain words, for the simple view. */
+  connection(from: string, to: string, text: string): void {
+    const a = this.topAreas.get(from);
+    const b = this.topAreas.get(to);
+    if (!a || !b) throw new Error(`fixture: unknown area in connection ${from} -> ${to}`);
+    this.connections[connectionKey(a, b)] = {
+      id: hashId('bullet', `${a}>${b}:plain`),
+      text,
+      origin: 'summarized',
+    };
   }
 
   private external(pkg: string): string {
@@ -370,6 +402,7 @@ export class DeckBuilder {
         edges: this.edges,
         tests: this.tests,
         gaps: this.gaps,
+        ...(Object.keys(this.connections).length ? { connections: this.connections } : {}),
         stats: {
           files: Object.keys(this.sources).length,
           lines: Object.values(this.sources).reduce((n, s) => n + s.split('\n').length, 0),

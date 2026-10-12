@@ -53,7 +53,7 @@ export function MiniMap({ index, display }: { index: DeckIndex | null; display: 
     const oy = (H - bounds.height * scale) / 2 - bounds.y * scale;
     const boxes = [];
     for (const box of display.values()) {
-      if (box.kind !== 'area' || box.depth > 1) continue;
+      if (box.kind === 'block' || box.depth > 1) continue;
       const w = box.w * scale;
       const h = box.h * scale;
       if (w < 1.5 || h < 1.5) continue;

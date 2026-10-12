@@ -7,7 +7,7 @@ import { BLOCK_W } from './measure';
 
 export interface Box {
   id: Id;
-  kind: 'area' | 'block';
+  kind: 'area' | 'block' | 'part';
   parent: Id | null;
   depth: number;
   x: number; // relative to the parent's top-left corner
@@ -267,6 +267,20 @@ export function makeRoom(
 
 let elk: InstanceType<typeof ELK> | null = null;
 
+/** The ELK worker that arranges the full map. */
+export function layoutEngine(): InstanceType<typeof ELK> {
+  elk ??= new ELK({ workerUrl: elkWorkerUrl });
+  return elk;
+}
+
+let simpleElk: InstanceType<typeof ELK> | null = null;
+
+/** A second worker for the simple view, so that neither arrangement waits for the other. */
+export function simpleEngine(): InstanceType<typeof ELK> {
+  simpleElk ??= new ELK({ workerUrl: elkWorkerUrl });
+  return simpleElk;
+}
+
 function buildElkGraph(
   index: DeckIndex,
   rest: (id: Id) => number,
@@ -350,7 +364,7 @@ function buildElkGraph(
 
 /** A full automatic layout. Runs in a worker and never blocks the canvas. */
 export async function autoLayout(index: DeckIndex, rest: (id: Id) => number): Promise<Positions> {
-  elk ??= new ELK({ workerUrl: elkWorkerUrl });
+  const elk = layoutEngine();
   let result = await elk.layout(buildElkGraph(index, rest));
   // Layers suit an area whose blocks call each other in a chain. They suit a large area with a
   // hub and many spokes badly: one long row or column, and most of the area empty. An area of

@@ -24,7 +24,7 @@ export interface Deck {
   git(...args: string[]): string;
   read(rel: string): string;
   write(rel: string, text: string): void;
-  open(page: Page): Promise<void>;
+  open(page: Page, view?: 'simple' | 'advanced'): Promise<void>;
 }
 
 function launch(
@@ -132,8 +132,8 @@ export async function startDecker(
     mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
     writeFileSync(path.join(root, rel), text);
   };
-  deck.open = async (page) => {
-    await page.goto(deck.url);
+  deck.open = async (page, view = 'advanced') => {
+    await page.goto(`${deck.url}&view=${view}`);
     await ready(page);
   };
   return deck;

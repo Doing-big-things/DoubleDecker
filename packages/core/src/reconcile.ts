@@ -78,6 +78,20 @@ export function reconcile(input: ReconcileInput): Reconciled {
         targetIds: [],
       });
   }
+  // Requests made in the simple view name a whole area (spec §3.13). Whatever changes inside
+  // that area is explained by the request, and a block that appears there was asked for.
+  const areaOf = (index: DeckIndex, id: Id): boolean => index.byId.get(id)?.kind === 'area';
+  const under = (index: DeckIndex, id: Id, areaId: Id): boolean => {
+    for (let cur = index.byId.get(id); cur; cur = cur.parentId ? index.byId.get(cur.parentId) : undefined)
+      if (cur.id === areaId) return true;
+    return false;
+  };
+  const askedAreas = new Set<Id>();
+  const explainArea = (areaId: Id) => {
+    askedAreas.add(areaId);
+    for (const index of [base, cand])
+      for (const b of index.blocks) if (under(index, b.id, areaId)) explained.add(b.id);
+  };
   const blockIn = (index: DeckIndex, id: Id): Id | undefined =>
     realBlock.get(id) ?? index.blockOf.get(id) ?? (index.byId.get(id)?.kind === 'block' ? id : undefined);
 
@@ -85,6 +99,30 @@ export function reconcile(input: ReconcileInput): Reconciled {
     const text = describeOp(base, op, ops);
     switch (op.type) {
       case 'add_edge': {
+        if (areaOf(base, op.from) && areaOf(base, op.to)) {
+          explainArea(op.from);
+          explainArea(op.to);
+          // Built when a block of the first area now calls into the second where it did not before.
+          const fresh: Id[] = [];
+          for (const link of cand.links) {
+            if (!under(cand, link.from, op.from) || !under(cand, link.to, op.to)) continue;
+            const before = new Set((base.linkById.get(link.id)?.edges ?? []).map((e) => e.id));
+            const added = link.edges.filter((e) => !before.has(e.id)).map((e) => e.id);
+            if (added.length) claimedLinks.add(link.id);
+            fresh.push(...added);
+          }
+          targetsOf.set(op.id, fresh);
+          if (fresh.length) finding({ kind: 'implemented', text, opId: op.id, targetIds: fresh });
+          else
+            finding({
+              kind: 'missing',
+              text,
+              detail: `No new call from ${base.byId.get(op.from)?.name} into ${base.byId.get(op.to)?.name} was found in the candidate.`,
+              opId: op.id,
+              targetIds: [],
+            });
+          break;
+        }
         const a = blockIn(cand, op.from) ?? blockIn(base, op.from);
         const b = blockIn(cand, op.to) ?? blockIn(base, op.to);
         if (a) explained.add(a);
@@ -177,6 +215,7 @@ export function reconcile(input: ReconcileInput): Reconciled {
       }
       case 'set_behavior':
       case 'add_behavior': {
+        if (areaOf(base, op.targetId)) explainArea(op.targetId);
         const block = base.blockOf.get(op.targetId) ?? realBlock.get(op.targetId);
         if (block) explained.add(block);
         const edge = base.edgeById.get(op.targetId);
@@ -258,7 +297,7 @@ export function reconcile(input: ReconcileInput): Reconciled {
           ? op.ownerId
             ? base.blockOf.get(op.ownerId)
             : undefined
-          : base.blockOf.get(op.targetId);
+          : (base.blockOf.get(op.targetId) ?? (areaOf(base, op.targetId) ? op.targetId : undefined));
       finding({
         kind: 'untested',
         text: describeOp(base, op, ops),
@@ -274,7 +313,8 @@ export function reconcile(input: ReconcileInput): Reconciled {
     const before = base.byId.get(b.id);
     if (!before) {
       changed.add(b.id);
-      if (!claimedBlocks.has(b.id) && !input.reverts)
+      const asked = [...askedAreas].some((areaId) => under(cand, b.id, areaId));
+      if (!claimedBlocks.has(b.id) && !asked && !input.reverts)
         finding({
           kind: 'unrequested',
           text: `New block ${b.name}`,

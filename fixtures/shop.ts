@@ -830,5 +830,44 @@ export function buildShop(): DeckBundle {
     });
   });
 
+  // The simple view (spec §3.13): what each area is for and does, and what each asks of
+  // another, as someone would say it to a person who does not read code.
+  d.plain('HTTP', 'The front door: takes requests from the website and the apps', [
+    'Checks who is calling',
+    'Hands each request to the right part',
+    'Turns problems into clear error messages',
+  ]);
+  d.plain('Orders', 'Takes a customer from a full cart to a paid order', [
+    'Holds what a customer wants to buy',
+    'Works out prices and discounts',
+    'Takes payment and confirms the order',
+    'Gets paid orders out of the door',
+  ]);
+  d.plain('Inventory', 'Keeps track of what is in stock', [
+    'Knows how many of each product are left',
+    'Holds stock for orders that have not shipped',
+    'Records new deliveries',
+    'Warns when stock runs low',
+  ]);
+  d.plain('Catalog', 'What the shop sells', [
+    'Lists products and their details',
+    'Sorts products into categories',
+    'Lets customers search',
+    'Keeps product photos',
+  ]);
+  d.plain('Payments', 'Takes money and gives it back', [
+    'Charges customers',
+    'Refunds them',
+    'Keeps a record of every movement of money',
+    'Hears back from the payment provider',
+  ]);
+  d.plain('Shared', 'Small tools every part relies on: money, time, IDs and logs');
+  d.connection('HTTP', 'Orders', 'places and tracks orders');
+  d.connection('HTTP', 'Catalog', 'gets catalog information');
+  d.connection('HTTP', 'Inventory', 'updates stock levels');
+  d.connection('Orders', 'Catalog', 'looks up products and prices');
+  d.connection('Orders', 'Inventory', 'holds stock for an order');
+  d.connection('Orders', 'Payments', 'charges and refunds customers');
+
   return d.build();
 }

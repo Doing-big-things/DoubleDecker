@@ -253,6 +253,14 @@ test('with a model configured, summaries stream in and are labeled; without one 
         .filter({ hasText: 'Guards Cart against bad input' })
         .locator('.dd-mark'),
     ).toHaveAttribute('data-o', 'authored');
+    // The simple view's descriptions are asked for after the blocks'. Wait for the model to go quiet.
+    await expect
+      .poll(async () => {
+        const n = calls;
+        await page.waitForTimeout(800);
+        return calls === n;
+      })
+      .toBe(true);
     const made = calls;
     expect(made).toBeGreaterThan(10);
     await deck.restart();

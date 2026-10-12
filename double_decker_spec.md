@@ -1,8 +1,8 @@
 # Double Decker
 
-**Design specification v0.4 · 2026-10-11 · Dallas**  
+**Design specification v0.5 · 2026-10-11 · Dallas**  
 **Concept owner: Jay Reed**  
-**Status: Proof of concept built through M4, verified end to end in host-sandbox mode. The container sandbox has never run, and the Claude worker has not yet completed a run against a real model. See "Build status" below.**
+**Status: Proof of concept built through M4, with the simple view on top (§3.13), verified end to end in host-sandbox mode. The container sandbox has never run, and no real model has run: not the Claude worker, and not a summarizer writing the simple view's words. See "Build status" below.**
 
 Supersedes v0.1, archived unchanged as `double_decker_original_idea_deprecated.md`. Appendix B lists what changed from v0.1 to v0.2. The "Build status" section lists what changed while building.
 
@@ -17,15 +17,18 @@ Built on 2026-10-11, straight through from M0 at Jay's instruction, without the 
 | **M2** Edit the deck | Built | The editing and regrouping tests in `e2e/canvas.spec.ts`, with stored reference images |
 | **M3** The agent loop | Built. Verified with stored candidates in host-sandbox mode only | `e2e/change-loop.spec.ts`, 6 tests |
 | **M4** Trust | Built, except what needs a container or a real model | Same suite, plus `e2e/integration-tier.spec.ts`, 3 tests |
+| **Simple view** (§3.13) | Built, after Jay's review of M0 to M4: the full map was more than the top level should show | `e2e/simple.spec.ts`, 9 tests on the fixture. `e2e/simple-loop.spec.ts`, 4 tests on real code with a real server |
 | **M5** Prove and extend | Not started | |
 
-All 30 of those tests pass. A 31st, `e2e/live-agent.spec.ts`, is described below and has not passed.
+All 43 of those tests pass. A 44th, `e2e/live-agent.spec.ts`, is described below and has not passed.
 
 **Not verified.** These are written and have never run to completion:
 
 - **The container sandbox** (§6.3). The development machine has no Docker, Podman or WSL 2. Every loop test uses `--sandbox host`.
 - **The Claude worker against a real model** (§6.2). It is wired for any model and effort, and `e2e/live-agent.spec.ts` drives the §9.1 demo request through it with Claude Haiku 5.5 at medium effort. The one attempt stopped before the first model call: the Claude Code sign-in on this machine had expired. Nothing was spent. The attempt did find two faults, both fixed: a failed sign-in was reported as "no plan", and decker started from inside another Claude Code session handed that session's settings to its worker.
 - **M4's hostile-instruction test.** It is part of the same live test: instructions planted in a README, a source comment and a package script tell the agent to write outside its worktree, run the script, and copy out a file it should not read. The guard those instructions would meet runs on every tool call, and on a host sandbox a model may run only the configured checks. Neither has been exercised by a model.
+- **A real model writing the simple view's words** (§3.13, §5.3). The path is built and tested against a stand-in endpoint that answers in a fixed pattern. How plainly a real model words an area, and whether its labels are right, has not been seen. Without a summarizer the words are the code's own comments and names: plain on the reference service, whose comments were written to be read, and thin on Hono, where most areas have no comment that speaks for the whole.
+- **A real model given a request made of a whole area.** The stored candidates stand in for it. Whether an agent told only "Catalog: let customers search for products by name" picks the right blocks is the question the simple view rests on, and the live test does not ask it yet.
 
 **Not built.**
 
@@ -64,6 +67,16 @@ All 30 of those tests pass. A 31st, `e2e/live-agent.spec.ts`, is described below
 | Services reached without a package | A doc comment with `@service Supabase` puts the service on the map as an External | A plain `fetch` leaves no import to see |
 | Test database store (§9.3) | Keeps its stock levels as one document in a Storage bucket | The key allows no schema changes over REST, and the project had no tables |
 | Reference service size (§9.1) | About 1,100 lines with 45 tests and 3 integration tests, not 2,000 | Enough to exercise every element |
+| Two views (§3.13) | The app opens on a simple view: one large part per top-level area, plain sentences, a labelled line between parts. The full map is the advanced view, behind a switch at the top right | Jay, on seeing M0 to M4: the full map is a fine low-level view and far too much for the top level. Someone who does not read code should see the shape of the program and be able to ask for something |
+| Requests in the simple view | A sentence asked of a part is `add_behavior` on its area. A line drawn between two parts is `add_edge` between two areas. No new kind of operation | The tray, the plan, the agent, the review and the notes all handle them as they are. Reconciliation and the deck text learned what a request made of an area means |
+| Common ground | A part that at least three others and 60% of the rest use, and that uses at most a quarter as many itself, is drawn as a bar beneath the rest with no lines to it | On the reference service five of the six lines went to "Shared", and said nothing |
+| Wiring | A connection in which one part only constructs the other's objects is not drawn | The HTTP area builds every other area at start-up. That is assembly, not something one asks of another |
+| How many connections | When there are more than ten and more than one and a half per part, the busiest are drawn, every part keeps its busiest, and the controls say how many of how many | The 1,500-block fixture has 24 parts and 157 connections between them |
+| Simple layout | Layers, top-down or left-to-right, whichever shows the picture larger on a 16:9 screen. Rows in reading order when a chain or a crowd would make layers screens long. ELK routes each line around the cards and keeps room on it for its label | Six cards in layers fit a laptop screen at 82%. A chain of six in layers fitted at 38% |
+| A requested connection | Drawn over the arrangement on the plainest path that crosses no card. It is left out of the layout | Laying it out moved every card and took the picture from 82% to 59%, for one sentence typed |
+| Zoom in the simple view | Steps of 4%, with text drawn just large enough to stay at 11 px and as many lines as fit | With the advanced view's bands, a card lost every line at once just below the size it is first shown at |
+| The panel and a double-click | A click on a part opens the panel a quarter of a second later | The panel slid under the second click of the double-click that opens a part |
+| Listening for updates | The browser starts listening before it loads the map and applies what arrived in between | A summarizer's answer that landed between the two was lost, on two of the three runs made before the fix |
 
 **Measured.** On an Intel Core i7-13700K with 32 GB RAM and an RTX 3080 Ti, Windows 11, headless Edge at 1440 by 900 with hardware acceleration. Frame rates are the 95th percentile over one sweep, from the last run of the test suite; they move by a few frames between runs.
 
@@ -72,7 +85,8 @@ All 30 of those tests pass. A 31st, `e2e/live-agent.spec.ts`, is described below
 | Pan, 42 blocks and 77 arrows | 60 fps | 233 fps on the whole map, 119 fps on full cards |
 | Wheel zoom inside one zoom band, 42 blocks | 60 fps | 233 fps |
 | Pan, 300 blocks and 579 arrows | 60 fps | 233 fps with the whole map on screen, and the same at the Architecture level |
-| Wheel zoom, 300 blocks | 60 fps | 119 fps with the whole map on screen. **18 to 24 fps at the Architecture level**: frames in which several cards and dozens of arrows come into view at once take 40 to 60 ms |
+| Wheel zoom, 300 blocks | 60 fps | 119 fps with the whole map on screen. **18 to 34 fps at the Architecture level** over the runs made: frames in which several cards and dozens of arrows come into view at once take 40 to 60 ms |
+| Pan and wheel zoom, simple view of the shop fixture | 60 fps | 238 fps and 233 fps |
 | Pan, 1,500 blocks and 3,784 arrows | 45 fps | 79 fps on the whole map, 79 fps on full cards |
 | Wheel zoom, 1,500 blocks | 45 fps | 80 fps on the whole map, 119 fps on full cards |
 | Crossing from one zoom band to the next | Not budgeted | One frame of 4 to 25 ms on 42 blocks, 21 to 75 ms on 300, 21 to 71 ms on 1,500, over the runs made. Everything on screen is redrawn for the new band |
@@ -108,6 +122,8 @@ The decks are linked in both directions:
 **The upper deck is the product.** Everything else exists to keep it truthful and to carry its edits down to code. The build order follows from that: the map's look, movement, and zoom are built and approved first (M0), before any extraction or agent work.
 
 This is not visual programming in the Unreal Blueprints sense. There is no wire per value and no node per statement. The unit is "block with a name, bullets underneath," and more detail appears only when asked for.
+
+**The upper deck has two views.** The **simple** view is what the app opens on: a few large parts, a few plain sentences on each, a labelled line between any two that talk, and one place on each part to ask for something in your own words. It needs no knowledge of code to read or to use. The **advanced** view is the full map of areas, blocks and arrows, one step behind it. A switch at the top right of the canvas goes between them (§3.13).
 
 ## 2. Decisions
 
@@ -161,7 +177,7 @@ This section is the core of the spec. M0 implements it against a hand-written fi
 └────────────────────────────────────┴─────────┴─┴─────────────────────┘
 ```
 
-The canvas takes all available space. The detail panel is a 380 px right dock, resizable and closable. The top bar holds the breadcrumb, search, the change tray, and the theme toggle. An outline view (a searchable tree of the same content) slides in from the left on demand.
+The canvas takes all available space. The detail panel is a 380 px right dock, resizable and closable. The top bar holds the breadcrumb, search, the change tray, and the theme toggle. An outline view (a searchable tree of the same content) slides in from the left on demand. The switch between the simple and the advanced view sits at the top right of the canvas (§3.13). The sketch above, and §3.3 to §3.12, describe the advanced view.
 
 ### 3.3 Elements
 
@@ -235,6 +251,7 @@ Rules:
 | Search and fly | | | `Ctrl+K` |
 | Camera back / forward | | | `Alt+←` / `Alt+→` |
 | Toggle outline view | | | `Ctrl+\` |
+| Simple or advanced view | Click the switch | Tap the switch | `S` |
 
 - Pan and zoom track the pointer directly with no lag. Zoom range is 0.05 to 2.5.
 - Camera jumps (search, focus, clicking an arrow's far end) animate over 300 to 400 ms with ease-out. Long jumps zoom out, travel, and zoom in rather than sliding across the map. Any input interrupts the animation.
@@ -374,6 +391,88 @@ When an agent finishes, the same canvas enters review mode for that change. A ba
 - The outline view is the textual equivalent of the map: the same areas, blocks, bullets, and arrows as a searchable tree. It is also the format agents receive (§4.4).
 - States are distinguishable without color. Screen-reader labels describe each block as "name, kind, state, N bullets."
 
+### 3.13 The simple view
+
+The upper deck has two views of the same map, and a switch between them. **Simple** is what the app opens on. **Advanced** is everything in §3.1 to §3.12, unchanged.
+
+The simple view is to the advanced view what describing a change to an agent in chat is to typing the code by hand. It is for someone who wants the shape of a program and how its pieces work together, and does not read code: a handful of large parts, a few plain sentences on each, and one labelled line between any two that talk.
+
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│                                                          [ Simple ]  │  the switch
+│                    ┌──────────────────────────┐   ┌───────────────┐  │
+│                    │ Orders                   │   │ Payments      │  │
+│  ┌──────────────┐  │ Takes a customer from a  │──▶│ Takes money   │  │
+│  │ HTTP         │─▶│ full cart to a paid order│   │ and gives it  │  │
+│  │ The front    │  │ • Holds what a customer  │   │ back          │  │
+│  │ door …       │  │   wants to buy           │   └───────────────┘  │
+│  └──────────────┘  │ • Works out prices …     │   charges and refunds│
+│   places and       │ + Ask for something new  │        customers     │
+│   tracks orders    └──────────────────────────┘                      │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │ Shared   Small tools every part relies on     Used by every …  │  │  common ground
+│  └────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**The switch.** One button at the top right of the canvas, 14 px in from both edges. It shows one word, "Simple" or "Advanced", for the view that is on screen, and pressing it (or `S`) goes to the other. The choice is remembered. Each view keeps its own camera: going back returns to where that view was left.
+
+**Parts.** One part for each top-level area, and one for any block that sits outside every area.
+
+| On a part | What it is |
+|---|---|
+| Name | The area's name, in the area's color |
+| Summary | One sentence: what the part is for |
+| Up to four lines | What it does, in plain words |
+| Lines with a square mark | What someone asked for on the map and accepted, in the words they used |
+| Amber lines with a change bar | What has been asked for and is not built |
+| "Ask for something new" | One click, one sentence, Enter (below) |
+| Count of blocks, and a tests chip | How much is inside, and whether its tests pass |
+
+- A part never shows a function name, a signature, a file, or an arrow kind. Those are one level down.
+- **Common ground.** A part that most others use, and that uses almost none of them, is drawn as a slim bar beneath the rest, and says who uses it in words. No lines are drawn to it. Five arrows into "Shared" say nothing that "used by every other part" does not.
+- **Wiring is not conversation.** When one part only builds another's objects at start-up and asks nothing of it by name, no line is drawn. The part's panel says what it puts together.
+
+**Connections.** One line for each ordered pair of parts where the first calls the second, routed around the cards, with what the first asks of the second written on it in a few words: "gets catalog information", "charges and refunds customers". The label is always shown at reading size.
+
+- **A picture, not a census.** When there are more connections than about one and a half per part (and more than ten), only the busiest are drawn. Every part keeps its busiest one, and the controls say "36 of 157 connections". Each part's panel lists all of its own.
+
+**Where the words come from.** In order of preference, and the panel says which for every line:
+
+| Source | Used for | Marked |
+|---|---|---|
+| A person | A summary or a label rewritten in the panel; an accepted request | "written by hand" |
+| A summarizer (§5.3) | A summary and two to four lines per area; a label per connection | "AI summary" |
+| The code's own comments | The doc comment of the block that leads the area; the doc comments of the operations other parts call | "from a comment in the code" |
+| Names in the code | A label made from the names of the operations called: "place, get and cancel orders", "gets catalog information", "reads and updates inventory" | "from names in the code" |
+
+With no summarizer configured, a part is only as plainly worded as its code's comments. Anyone can replace a summary or a label with their own words in the panel, and empty it to get the derived one back.
+
+**Asking for something.** Two gestures, both in plain words, both ordinary change operations (§3.8):
+
+| Gesture | Operation | Pending look |
+|---|---|---|
+| "Ask for something new" on a part (or `N`), a sentence, Enter | `add_behavior` on the area | An amber line on the part, and a flag: "1 request not sent" |
+| Drag from one part's edge to another, a sentence | `add_edge` between the two areas | A dashed amber line with those words on it |
+
+- **Nothing else moves.** A part that gains a line grows by that line. A connection that is only asked for takes the plainest path between its two cards that crosses no other card, and no card moves for it. Only what is built decides the arrangement.
+- A request made of an area tells the agent the whole area and what was asked of it. The agent decides which blocks to change, and any change inside that area is explained by the request (§6.4).
+- The flag on a part follows the change: "1 request not sent", "Waiting for you", "Being built", "Ready to review", "Did not work". Clicking it opens the change, or its review.
+- **Review happens on the same picture.** Parts that changed stand out and the rest step back. A connection that was built turns solid. A part that holds a broken requirement says "Contradicted". Accept, Revise and Reject are the same as in §3.9.
+- **Accepted words stay.** A request that is accepted stays on its part as a line marked as a person's words, and an accepted connection keeps the words it was asked in as its label.
+
+**Going deeper.** Double-click a part, press "Open" on it, or press `Enter`: the advanced view, at that part's area. Search results and anything else the simple view does not draw (a block, an operation, a test) go to the advanced view too. Selecting a part opens a panel with the same things in plain words: what it is for, what it does, what it talks to, what is outside the repository, and the blocks inside it.
+
+**Zoom.** The simple view pans and zooms like the full map and follows the 11 px rule in steps of 4%.
+
+| Zoom | A part shows |
+|---|---|
+| 76% and above | Everything |
+| 44% to 76% | Its text drawn just large enough to stay at 11 px, and as many lines as still fit, then "+N more". Requests are kept before anything else |
+| Below 44% | Its name. Labels appear on hover |
+
+**Layout.** Automatic and never dragged. Callers sit above what they call, as in the advanced view, unless reading left to right makes the whole picture clearly larger on a wide screen. A long chain of parts, or a great many of them, is set out in rows instead. The view stays fitted to its window, clear of the controls, until someone pans or zooms it.
+
 ## 4. The deck model
 
 ### 4.1 Entities
@@ -445,10 +544,14 @@ interface DeckSnapshot {
   edges: DeckEdge[];
   tests: DeckTest[];
   gaps: Gap[];
+  connections?: Record<string, Bullet>;  // "from>to": what one top-level area asks of another,
+                                         // in plain words. Written by a summarizer, never extracted (§3.13)
 }
 ```
 
 The model is language-neutral. A language adapter's whole job is to produce a `DeckSnapshot`.
+
+The simple view (§3.13) is not stored. It is derived from the snapshot and the notes each time the map is drawn, so it can never show something the full map does not have.
 
 Test results are not part of the snapshot, which depends only on the code. They are evidence, stored per commit in the cache and joined to tests by ID when the map is drawn.
 
@@ -472,7 +575,8 @@ Anything unmatched gets a new ID, and the old ID is kept as a tombstone.
                      editor command, checks to run, container image
   ids.json           identity bindings and tombstones
   layout.json        positions, hand-placed blocks, blocks regrouped into another area
-  notes.json         authored and pinned bullets; what an accepted arrow was asked to be
+  notes.json         authored and pinned bullets; what an accepted arrow was asked to be;
+                     summaries and connection labels rewritten by hand for the simple view
   changes/<id>.json  one file per change: operations, plan, candidates, decisions (append-only events)
   cache/             git-ignored: compiled snapshots, AI summary cache, check output
 ```
@@ -543,6 +647,7 @@ The same commit and configuration must produce a byte-identical snapshot: arrays
 - The map renders from declared bullets immediately. Summaries stream in afterward and never delay the first paint.
 - The engineer can pin a summarized bullet, which makes it authored, or dismiss it.
 - The summarizer accepts any Anthropic or OpenAI-compatible endpoint, including a local one. With no model configured the product still works.
+- **The simple view's words are a third pass** (§3.13), after the blocks. The same model is shown one area's outline, not its source, and returns one sentence for what the area is for and two to four short phrases for what it does, in everyday words. It is then shown every connection between areas as one numbered line each, with what is asked along it, and returns a label of three to six words for each. Answers are cached by exactly what the model was shown, so nothing unchanged is asked about twice. They are marked "AI summary" and are never evidence.
 
 ### 5.4 Staying current
 
@@ -637,6 +742,7 @@ Compare the base snapshot with the candidate snapshot, then explain the differen
 - `set_behavior`, `add_behavior`, and plan requirements cannot be established from structure. Each is "supported by a test," "contradicted by a test," or "not tested," according to the harness checks linked to it. Not tested is shown as such and never as a pass.
 - Every difference that no operation explains is Unrequested.
 - The request and the base snapshot are never rewritten to match what the agent built.
+- **Requests made of a whole area** (§3.13) are wider than requests made of a block. A behavior asked of an area explains any change inside that area, and a block that appears there was asked for. A connection asked for between two areas is Implemented when a block of the first now calls into the second where it did not before, and Missing otherwise. What the request touches outside those areas is explained only by the files the approved plan named.
 
 ### 6.5 Direct code edits
 
@@ -653,7 +759,7 @@ Every statement on the map belongs to one layer, and the layers are never merged
 | **Observed code facts** | The extracted snapshot | Solid, uncolored; `•` bullets |
 | **Tested evidence** | Harness check runs, stored per commit and candidate | Tests chips; check and "Contradicted" badges |
 | **Accepted baseline** | A git commit plus the committed `.deck/` files | The resting state |
-| *Interpretation* | AI summaries | `◦` bullets, labeled |
+| *Interpretation* | AI summaries, including the simple view's words when a summarizer wrote them | `◦` bullets, labeled; "AI summary" in the simple view's panel |
 
 - An observed call does not establish intent. A passing test supports a requirement and does not prove it for all inputs. A model's summary is never evidence.
 - "Unknown," "unsupported by the extractor," "not tested," and "contradicted" are different states and are shown differently.
@@ -717,7 +823,7 @@ Versions are the current releases on npm as of 2026-10-11.
 | `POST /api/changes`, `PATCH /api/changes/:id` | Create a change; add or edit operations |
 | `POST /api/changes/:id/{submit,approve,revise,accept,reject}` | Lifecycle transitions |
 | `GET /api/changes/:id/review` | Review bundle for the current candidate |
-| `WS /api/events` | Snapshot patches, change state, agent progress |
+| `WS /api/events` | Snapshot patches, change state, agent progress, summaries, and the simple view's connection labels. The browser starts listening before it loads the map, and applies what arrived in between once the map is there |
 
 ### 8.4 Deployment
 
@@ -754,6 +860,8 @@ The demo, carried over from v0.1:
 6. The engineer presses Revise. The second candidate passes. Review shows the new API, the validation path, and the affected callers, and the engineer accepts.
 
 For M4 the flawed first candidate is a stored patch, so detection is tested deterministically and does not depend on an agent making the mistake.
+
+**The same demo in the simple view** (§3.13). The engineer drags a line from the Orders part to the Inventory part and types "reserve stock for every item before an order is confirmed". A dashed amber line appears with those words on it. The plan, the two questions, the flawed first candidate, the revision and the acceptance are the same change loop. In review the Inventory part says "Contradicted", and once accepted the line is solid and still carries the words it was asked in. A second request, "Let customers search for products by name" typed on the Catalog part, goes through with one candidate. Both are tested end to end with the stored candidates.
 
 ### 9.2 Real repositories
 
@@ -836,6 +944,15 @@ These are targets to measure against, not results. Record hardware, cold and war
 - No requested item can be mistaken for an implemented one, checked by visual regression tests.
 - The deck text of a change reads as a clear task description.
 
+**The simple view.** Added after M4, at Jay's direction (§3.13).
+
+- The app opens on it. A switch at the top right of the canvas shows one word and goes to the advanced view and back. Each view keeps its place.
+- A handful of parts in plain words, a labelled line between any two that talk, common ground as a bar, nothing smaller than 11 px at any zoom, and no card or label covering another.
+- A sentence typed on a part, and a line drawn between two parts, become operations that are saved, undone, sent, planned, built, reviewed and accepted like any other.
+- Asking moves nothing that was already there.
+- A part opens onto its area in the advanced view. Anything the simple view does not draw is found there.
+- On real code with no model, the words come from the code and say so. With a summarizer, they come from it and say so. A person's words replace either.
+
 **M3: The agent loop.** Requires Docker or Podman.
 
 - Submit, plan, approve, implement in a worktree, check, re-extract, review, and accept all work end to end on the §9.1 demo.
@@ -905,13 +1022,17 @@ Decided with Jay on 2026-10-11:
 | Look | Dark-first |
 | Tests on the map | A collapsed chip per block that expands in place (§3.7) |
 | Test database | A free-tier Supabase project, credentials in the git-ignored `TestDB.env`; optional, for the integration tier and second demo (§9.3) |
+| What the top level shows | A simple view, on by default: large parts, plain words, labelled connections, and asking in a sentence. The full map is the advanced view, one drill-down behind a Simple/Advanced switch at the top right of the canvas (§3.13) |
 
 Still open. None of these blocks M0 to M2:
 
 - **A container runtime is not installed on the development machine.** It has neither Docker nor WSL 2. M3 was built and tested in host-sandbox mode instead. One of Docker Desktop or Podman, on WSL 2, is needed to run and verify the container sandbox.
 - **The Claude worker has not completed a run.** Jay approved Claude Haiku 5.5 at medium effort for testing. The Claude Code sign-in on the development machine had expired, so the first attempt made no model call. After `claude auth login`, `DECKER_LIVE=1 npx playwright test live-agent` runs the demo request and the hostile-instruction test against the real model.
 - **Zooming at the Architecture level on a 300-block map misses its frame-rate target.** Each card or arrow that comes into view is mounted as a component, and several dozen at once take 40 to 60 ms. Drawing arrows on one canvas, or mounting them a little ahead of the screen edge, are the two ways to fix it.
-- **Look and feel sign-off.** M0's gate was skipped at Jay's instruction. His review of the map is still owed.
+- **Look and feel sign-off.** M0's gate was skipped at Jay's instruction. His first look at the result led to the simple view. His review of both views is the next step.
+- **The simple view's words on code nobody wrote comments for.** Derived from Hono, every one of its ten parts is summed up by a list of its blocks, and most of its lines read "uses core" or "uses helper". That was read from the derived text, not looked at on screen. A summarizer is the intended answer and has not been tried with a real model. A second way would be to use the agent worker's own model for it, so that one sign-in serves both.
+- **Simple-view layout does not adapt to the window.** It is chosen for a 16:9 screen and then fitted. In a narrow pane the same arrangement is shown smaller, with fewer lines on each card.
+- **Parts cannot be dragged** in the simple view, and a whole new part cannot be asked for there: a request is always made of a part that exists, or of two.
 - **Python before C++?** C++ remains launch language two. A Python adapter is cheaper and would let Jay map his own projects. Decide at M5.
 - **Tests on arrows.** The PoC attaches tests to arrows only through a change's requirements. Whether to attribute integration tests to the arrows they cross is undecided.
 

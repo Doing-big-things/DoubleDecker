@@ -36,7 +36,7 @@ export interface Route {
   slide?: { x0: number; x1: number; y: number };
 }
 
-function rounded(points: [number, number][], radius: number): { d: string; parts: string[] } {
+export function rounded(points: [number, number][], radius: number): { d: string; parts: string[] } {
   const parts: string[] = [];
   let from = points[0]!;
   const run = (to: [number, number]) => {
