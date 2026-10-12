@@ -85,6 +85,7 @@ All 44 of those tests pass. A 45th, `e2e/live-agent.spec.ts`, is described below
 | Where a requested line ends | At a free place on the card's side, 30 px or more from any other line's end. It runs behind no label when another way is open | Its end landed exactly on a built line's end, and its dashes ran behind that line's label |
 | A request between two stacked parts | The line and its label sit near the cards' right-hand ends, and stacked cards stand 48 px apart | In the middle, the label covered the flag that hangs on the lower card's top left corner |
 | Labels with no room to move | Placed first. Labels on longer runs then slide clear of them | On the 300-block fixture two labels lay one on the other, where a short straight line met a long one |
+| A card with room for one line | Shows "+3 more" under its summary | In a small window a card showed its summary and then two lines of nothing, because a line and its count did not both fit |
 | A reveal that came late | The pan that keeps a chosen part in sight once its panel has opened is dropped if the selection or the view has changed by then | It stopped the camera halfway to a search result in the other view. The test for that journey failed two runs in three once the timing shifted |
 
 **Measured.** On an Intel Core i7-13700K with 32 GB RAM and an RTX 3080 Ti, Windows 11, headless Edge at 1440 by 900 with hardware acceleration. Frame rates are the 95th percentile over one sweep, from the last run of the test suite; they move by a few frames between runs.
@@ -503,7 +504,7 @@ With no summarizer configured, a part is only as plainly worded as its code's co
 | Zoom | A part shows |
 |---|---|
 | 76% and above | Everything |
-| 44% to 76% | Its text drawn just large enough to stay at 11 px, and as many lines as still fit, then "+N more". Requests are kept before anything else |
+| 44% to 76% | Its text drawn just large enough to stay at 11 px, and as many lines as still fit, then "+N more". With room for one line and no more, the count alone. Requests are kept before anything else |
 | Below 44% | Its name. Labels appear on hover |
 
 **Layout.** Automatic and never dragged. Callers sit above what they call, as in the advanced view, unless reading left to right makes the whole picture clearly larger on a wide screen. A long chain of parts, or a great many of them, is set out in rows instead. The view stays fitted to its window, clear of the controls, until someone pans or zooms it.

@@ -256,6 +256,21 @@ test('no text in the simple view is drawn smaller than 11 px, and cards give up 
       [...document.querySelectorAll('.dd-part-body')].map((el) => el.scrollHeight - el.clientHeight),
     );
     expect(Math.max(...spill)).toBeLessThanOrEqual(1);
+    // And no card ends in blank space where a line would fit: one that has room for none of
+    // its lines beside their count shows the count alone.
+    const blank = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('[data-testid="part"][data-lod="scaled"]')].map((card) => {
+        const body = card.querySelector<HTMLElement>('.dd-part-body');
+        if (!body || body.querySelector('.dd-part-row, .dd-part-more')) return 0;
+        const grown = Number(card.style.getPropertyValue('--ps')) || 1;
+        const box = body.getBoundingClientRect();
+        const zoomed = box.height / body.offsetHeight;
+        const free = (box.bottom - body.lastElementChild!.getBoundingClientRect().bottom) / zoomed - 12;
+        return free / ((21 + 8) * grown);
+      }),
+    );
+    expect(Math.max(0, ...blank)).toBeLessThan(1);
+    if (z === 0.46) await expect(page.locator('.dd-part-more').first()).toHaveText(/^\+\d more$/);
   }
   // Far out: names only, and still nothing too small to read.
   for (const z of [0.4, 0.25, 0.12]) {

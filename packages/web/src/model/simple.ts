@@ -749,5 +749,8 @@ export function fitPart(
     }
   }
   const rows = sized.filter((row) => keep.has(row));
-  return { summaryLines, rows, more: total - rows.length };
+  // With no room for any line and its "+N more", the count alone still says there is more
+  // inside, when one line fits. A card never ends in unexplained empty space.
+  const counted = rows.length > 0 || room >= line;
+  return { summaryLines, rows, more: counted ? total - rows.length : 0 };
 }

@@ -275,7 +275,7 @@ export const PartNode = memo(function PartNode({ id, width, height }: NodeProps)
             {part.summary.text}
           </div>
         ) : null}
-        {shown.rows.length ? (
+        {shown.rows.length || shown.more > 0 ? (
           <div className="dd-part-rows">
             {shown.rows.map((row) => {
               const rowState = findings.get(row.line.id) ?? marks.get(row.line.id)?.state;
